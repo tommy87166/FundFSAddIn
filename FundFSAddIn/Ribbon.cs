@@ -254,6 +254,130 @@ namespace FundFSAddIn
             }
         }
 
+        // 取得帶有 "文字_" 前綴的已定義名稱列表
+        private List<string> GetExcelTextDefinedNames(string filePath)
+        {
+            var list = new List<string>();
+            Excel.Application excel = null;
+            Excel.Workbook wb = null;
+            try
+            {
+                excel = new Excel.Application { Visible = false, DisplayAlerts = false };
+                wb = excel.Workbooks.Open(filePath, ReadOnly: true);
+                foreach (Excel.Name name in wb.Names)
+                {
+                    if (name.Name.StartsWith("文字_"))
+                    {
+                        list.Add(name.Name);
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                if (wb != null) wb.Close(false);
+                if (excel != null) excel.Quit();
+                if (wb != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
+                if (excel != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(excel);
+            }
+            return list;
+        }
+
+        // 讓使用者選擇一個已定義名稱，並將其值插入 Word 內容控制項
+        private void btnInsertText_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
+                {
+                    throw new Exception("未指定附註檔");
+                }
+                var names = GetExcelTextDefinedNames(_excelFilePath);
+                if (names == null || names.Count == 0)
+                {
+                    MessageBox.Show("找不到任何文字定義名稱。", "錯誤");
+                    return;
+                }
+                string name = ShowTextNameSelectDialog(names);
+                if (string.IsNullOrWhiteSpace(name)) return;
+
+                // 取得名稱對應的值
+                string value = GetExcelDefinedNameValue(_excelFilePath, name);
+                if (value == null)
+                {
+                    MessageBox.Show("無法取得名稱值。", "錯誤");
+                    return;
+                }
+                // 插入內容控制項
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
+                wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+                Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
+                cc.Tag = name;
+                cc.Title = name;
+                cc.Range.Text = value;
+                cc.LockContents = true;
+                cc.LockContentControl = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+            }
+        }
+
+        // 取得指定名稱的值
+        private string GetExcelDefinedNameValue(string filePath, string name)
+        {
+            Excel.Application excel = null;
+            Excel.Workbook wb = null;
+            try
+            {
+                excel = new Excel.Application { Visible = false, DisplayAlerts = false };
+                wb = excel.Workbooks.Open(filePath, ReadOnly: true);
+                foreach (Excel.Name n in wb.Names)
+                {
+                    if (n.Name == name)
+                    {
+                        var range = n.RefersToRange;
+                        if (range != null)
+                        {
+                            object val = range.Value2;
+                            if (val != null)
+                                return val.ToString();
+                        }
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                if (wb != null) wb.Close(false);
+                if (excel != null) excel.Quit();
+                if (wb != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
+                if (excel != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(excel);
+            }
+            return null;
+        }
+
+        // 顯示選擇名稱的對話框
+        private string ShowTextNameSelectDialog(List<string> names)
+        {
+            using (var form = new Form())
+            {
+                form.Text = "選擇文字名稱";
+                form.Width = 300;
+                form.Height = 180;
+                var listBox = new ListBox { Dock = DockStyle.Fill };
+                listBox.Items.AddRange(names.ToArray());
+                form.Controls.Add(listBox);
+                var btnOK = new Button { Text = "確定", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK };
+                form.Controls.Add(btnOK);
+                form.AcceptButton = btnOK;
+                if (form.ShowDialog() == DialogResult.OK && listBox.SelectedItem != null)
+                    return listBox.SelectedItem.ToString();
+            }
+            return null;
+        }
 
 
 

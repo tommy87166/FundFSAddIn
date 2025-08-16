@@ -128,6 +128,7 @@
             this.btnInsertText.Label = "插入文字段";
             this.btnInsertText.Name = "btnInsertText";
             this.btnInsertText.ShowImage = true;
+            this.btnInsertText.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnInsertText_Click);
             // 
             // btnGoToExcel
             // 
