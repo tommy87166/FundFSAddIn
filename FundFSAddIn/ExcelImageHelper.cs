@@ -12,13 +12,25 @@ namespace FundFSAddIn
             Excel.Application excel = null;
             Excel.Workbook wb = null;
             Excel.Worksheet ws = null;
+            Excel.XlWindowView? originalView = null;
             try
             {
                 excel = new Excel.Application { Visible = false, DisplayAlerts = false };
                 wb = excel.Workbooks.Open(workbookPath, ReadOnly: true);
                 ws = ResolveSheet(wb, sheetName);
+
+                // 記錄原本檢視模式
+                originalView = (Excel.XlWindowView)ws.Application.ActiveWindow.View;
+                // 若不是標準檢視，切換到標準檢視
+                if (originalView != Excel.XlWindowView.xlNormalView)
+                    ws.Application.ActiveWindow.View = Excel.XlWindowView.xlNormalView;
+
                 Excel.Range rng = GetPrintArea(ws);
                 rng.CopyPicture(Excel.XlPictureAppearance.xlScreen, Excel.XlCopyPictureFormat.xlPicture);
+
+                // 複製完畢後還原檢視模式
+                if (originalView != null && ws.Application.ActiveWindow.View != originalView)
+                    ws.Application.ActiveWindow.View = originalView.Value;
             }
             finally
             {
