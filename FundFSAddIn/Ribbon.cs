@@ -5,12 +5,16 @@ using System.Windows.Forms;
 using Microsoft.VisualBasic;
 using System.Collections.Generic;
 using Excel = Microsoft.Office.Interop.Excel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace FundFSAddIn
 {
     public partial class Ribbon
     {
         private string _excelFilePath = null;
+        private const string TablePrefix = "表格_";
+        private const string TextPrefix = "文字_";
 
         private void Ribbon_Load(object sender, RibbonUIEventArgs e)
         {
@@ -25,7 +29,8 @@ namespace FundFSAddIn
                 var ofd = new OpenFileDialog
                 {
                     Title = "選擇 Excel 檔案",
-                    Filter = "Excel 檔案|*.xlsx;*.xlsm;*.xls"
+                    Filter = "Excel 檔案|*.xlsx;*.xlsm;*.xls",
+                    CheckFileExists = true
                 };
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
@@ -36,13 +41,14 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
         // 更新顯示的 Excel 檔案名稱標籤
         private void UpdateExcelFileNameLabel()
         {
-            if (string.IsNullOrEmpty(_excelFilePath))
+            if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
             {
                 lblExcelFileName.Label = "尚未指定附註檔";
                 btnInsertTable.Enabled = false;
@@ -66,10 +72,7 @@ namespace FundFSAddIn
         {
             try
             {
-                if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
-                {
-                    throw new Exception("未指定附註檔");
-                }
+                ValidateExcelPath();
 
                 var sheets = GetExcelSheetNames(_excelFilePath);
                 if (sheets == null || sheets.Count == 0)
@@ -77,12 +80,10 @@ namespace FundFSAddIn
                     MessageBox.Show("找不到任何工作表。", "錯誤");
                     return;
                 }
-                //選取附註檔中的工作表
                 string sheet = ShowSheetSelectDialog(sheets);
                 if (string.IsNullOrWhiteSpace(sheet)) return;
-                // 直接用工作表名稱作為內容控制項名稱
-                string tag = sheet;
-                //插入附註圖片到 Word 文件
+                string tag = sheet; // 直接用工作表名稱作為內容控制項名稱
+
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
                 ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
                 Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
@@ -97,6 +98,7 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
@@ -112,19 +114,29 @@ namespace FundFSAddIn
                 wb = excel.Workbooks.Open(filePath, ReadOnly: true);
                 foreach (Excel.Worksheet ws in wb.Sheets)
                 {
-                    if (ws.Name.StartsWith("表格_"))
+                    try
                     {
-                        list.Add(ws.Name);
+                        if (ws.Name.StartsWith(TablePrefix, StringComparison.Ordinal))
+                        {
+                            list.Add(ws.Name);
+                        }
+                    }
+                    finally
+                    {
+                        ReleaseCom(ws);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
             finally
             {
                 if (wb != null) wb.Close(false);
                 if (excel != null) excel.Quit();
-                if (wb != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
-                if (excel != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(excel);
+                ReleaseCom(wb);
+                ReleaseCom(excel);
             }
             return list;
         }
@@ -137,7 +149,7 @@ namespace FundFSAddIn
                 form.Text = "選擇工作表";
                 form.Width = 300;
                 form.Height = 180;
-                var listBox = new ListBox { Dock = DockStyle.Fill };
+                var listBox = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
                 listBox.Items.AddRange(sheets.ToArray());
                 form.Controls.Add(listBox);
                 var btnOK = new Button { Text = "確定", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK };
@@ -166,12 +178,12 @@ namespace FundFSAddIn
                     if (!string.IsNullOrEmpty(cc.Tag))
                     {
                         string sheet = cc.Tag;
-                        var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
                         if (string.IsNullOrEmpty(_excelFilePath))
                         {
                             MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
                             return;
                         }
+                        var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
                         thisAddIn.OpenExcelAndActivateSheet(_excelFilePath, sheet);
                         return;
                     }
@@ -181,6 +193,7 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
@@ -198,7 +211,7 @@ namespace FundFSAddIn
                 }
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
-                    if (!string.IsNullOrEmpty(cc.Tag))
+                    if (!string.IsNullOrEmpty(cc.Tag) && cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
                     {
                         string sheet = cc.Tag;
                         if (string.IsNullOrEmpty(_excelFilePath))
@@ -206,21 +219,23 @@ namespace FundFSAddIn
                             MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
                             return;
                         }
-                        // 取得最新圖片到剪貼簿
                         ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
                         cc.LockContents = false;
-                        cc.Range.Delete();
-                        cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
+                        // 不刪除控制項本體，只清空內容再貼上
+                        Word.Range r = cc.Range.Duplicate;
+                        r.Text = string.Empty; // 清空現有文字/物件標記
+                        r.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
                         cc.LockContents = true;
-                        cc.LockContentControl = true; // 鎖定控制項本身不可刪除或移動
+                        cc.LockContentControl = true;
                         return;
                     }
                 }
-                MessageBox.Show("請先選取一個附註。", "提示");
+                MessageBox.Show("請先選取一個附註 (表格_*)。", "提示");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
@@ -240,6 +255,7 @@ namespace FundFSAddIn
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
                     cc.LockContentControl = false; // 先解鎖控制項
+                    cc.LockContents = false;
                     cc.Delete(true); // true: 刪除控制項本身與內容
                     deleted = true;
                 }
@@ -251,6 +267,7 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
@@ -266,19 +283,29 @@ namespace FundFSAddIn
                 wb = excel.Workbooks.Open(filePath, ReadOnly: true);
                 foreach (Excel.Name name in wb.Names)
                 {
-                    if (name.Name.StartsWith("文字_"))
+                    try
                     {
-                        list.Add(name.Name);
+                        if (name != null && name.Name.StartsWith(TextPrefix, StringComparison.Ordinal))
+                        {
+                            list.Add(name.Name);
+                        }
+                    }
+                    finally
+                    {
+                        ReleaseCom(name);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
             finally
             {
                 if (wb != null) wb.Close(false);
                 if (excel != null) excel.Quit();
-                if (wb != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
-                if (excel != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(excel);
+                ReleaseCom(wb);
+                ReleaseCom(excel);
             }
             return list;
         }
@@ -288,10 +315,7 @@ namespace FundFSAddIn
         {
             try
             {
-                if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
-                {
-                    throw new Exception("未指定附註檔");
-                }
+                ValidateExcelPath();
                 var names = GetExcelTextDefinedNames(_excelFilePath);
                 if (names == null || names.Count == 0)
                 {
@@ -301,14 +325,12 @@ namespace FundFSAddIn
                 string name = ShowTextNameSelectDialog(names);
                 if (string.IsNullOrWhiteSpace(name)) return;
 
-                // 取得名稱對應的值
                 string value = GetExcelDefinedNameValue(_excelFilePath, name);
                 if (value == null)
                 {
                     MessageBox.Show("無法取得名稱值。", "錯誤");
                     return;
                 }
-                // 插入內容控制項
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
                 Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
                 wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
@@ -322,6 +344,7 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
 
@@ -330,31 +353,42 @@ namespace FundFSAddIn
         {
             Excel.Application excel = null;
             Excel.Workbook wb = null;
+            Excel.Range range = null;
             try
             {
                 excel = new Excel.Application { Visible = false, DisplayAlerts = false };
                 wb = excel.Workbooks.Open(filePath, ReadOnly: true);
                 foreach (Excel.Name n in wb.Names)
                 {
-                    if (n.Name == name)
+                    try
                     {
-                        var range = n.RefersToRange;
-                        if (range != null)
+                        if (n != null && n.Name == name)
                         {
-                            object val = range.Value2;
-                            if (val != null)
-                                return val.ToString();
+                            range = n.RefersToRange; // 可能為 null
+                            if (range != null)
+                            {
+                                object val = range.Value2;
+                                return val?.ToString();
+                            }
                         }
+                    }
+                    finally
+                    {
+                        ReleaseCom(n);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
             finally
             {
+                if (range != null) ReleaseCom(range);
                 if (wb != null) wb.Close(false);
                 if (excel != null) excel.Quit();
-                if (wb != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
-                if (excel != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(excel);
+                ReleaseCom(wb);
+                ReleaseCom(excel);
             }
             return null;
         }
@@ -367,7 +401,7 @@ namespace FundFSAddIn
                 form.Text = "選擇文字名稱";
                 form.Width = 300;
                 form.Height = 180;
-                var listBox = new ListBox { Dock = DockStyle.Fill };
+                var listBox = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
                 listBox.Items.AddRange(names.ToArray());
                 form.Controls.Add(listBox);
                 var btnOK = new Button { Text = "確定", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK };
@@ -379,7 +413,27 @@ namespace FundFSAddIn
             return null;
         }
 
+        private void ValidateExcelPath()
+        {
+            if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
+            {
+                throw new Exception("未指定附註檔");
+            }
+        }
 
-
+        private static void ReleaseCom(object o)
+        {
+            try
+            {
+                if (o != null && Marshal.IsComObject(o))
+                {
+                    Marshal.ReleaseComObject(o);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ReleaseCom 失敗: " + ex.Message);
+            }
+        }
     }
 }
