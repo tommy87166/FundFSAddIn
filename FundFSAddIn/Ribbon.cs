@@ -54,9 +54,14 @@ namespace FundFSAddIn
                 }
 
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                ExcelImageHelper.PasteExcelPrintAreaAsMetafileToContentControl(doc, _excelFilePath, sheet, tag);
-
-                MessageBox.Show($"已插入 Excel 原生圖片（EMF）並放入內容控制項，Tag = {tag}");
+                ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
+                Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
+                wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+                Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
+                cc.Tag = tag;
+                cc.Title = tag;
+                cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
+                cc.LockContents = true; // 貼上後再鎖定內容，避免使用者修改
             }
             catch (Exception ex)
             {
@@ -64,15 +69,6 @@ namespace FundFSAddIn
             }
         }
 
-        private void btnUpdate_Click(object sender, RibbonControlEventArgs e)
-        {
-            MessageBox.Show("目前僅支援插入 EMF 圖片，不支援更新內容控制項圖片。請先刪除舊內容控制項再插入新圖片。", "提示");
-        }
-
-        private string Prompt(string text, string defaultValue)
-        {
-            return Microsoft.VisualBasic.Interaction.InputBox(text, "輸入", defaultValue ?? "");
-        }
 
         // 取得 Excel 檔案的所有工作表名稱
         private List<string> GetExcelSheetNames(string filePath)
@@ -179,7 +175,7 @@ namespace FundFSAddIn
                             return;
                         }
                         // 取得最新圖片到剪貼簿
-                        ExcelImageHelper.CopyPrintAreaToClipboardAsMetafile(file, sheet);
+                        ExcelImageHelper.CopyPrintAreaToClipboard(file, sheet);
                         cc.LockContents = false;
                         cc.Range.Delete();
                         cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
