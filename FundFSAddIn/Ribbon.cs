@@ -92,6 +92,7 @@ namespace FundFSAddIn
                 cc.Title = tag;
                 cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
                 cc.LockContents = true; // 貼上後再鎖定內容，避免使用者修改
+                cc.LockContentControl = true; // 鎖定控制項本身不可刪除或移動
             }
             catch (Exception ex)
             {
@@ -211,6 +212,7 @@ namespace FundFSAddIn
                         cc.Range.Delete();
                         cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
                         cc.LockContents = true;
+                        cc.LockContentControl = true; // 鎖定控制項本身不可刪除或移動
                         return;
                     }
                 }
@@ -222,7 +224,37 @@ namespace FundFSAddIn
             }
         }
 
-        
+        // 按下按鈕後，刪除選取的內容控制項
+        private void btnDeleteCC_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                var app = Globals.ThisAddIn.Application;
+                var sel = app.Selection;
+                if (sel == null || sel.Range == null)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                bool deleted = false;
+                foreach (Word.ContentControl cc in sel.Range.ContentControls)
+                {
+                    cc.LockContentControl = false; // 先解鎖控制項
+                    cc.Delete(true); // true: 刪除控制項本身與內容
+                    deleted = true;
+                }
+                if (!deleted)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+            }
+        }
+
+
 
 
     }
