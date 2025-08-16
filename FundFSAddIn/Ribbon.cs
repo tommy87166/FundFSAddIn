@@ -55,6 +55,8 @@ namespace FundFSAddIn
                 btnInsertText.Enabled = false;
                 btnGoToExcel.Enabled = false;
                 btnUpdateOne.Enabled = false;
+                btnUpdateAll.Enabled = false;
+                btnDeleteCC.Enabled = false;
             }
             else
             {
@@ -64,6 +66,8 @@ namespace FundFSAddIn
                 btnInsertText.Enabled = true;
                 btnGoToExcel.Enabled = true;
                 btnUpdateOne.Enabled = true;
+                btnUpdateAll.Enabled = true;
+                btnDeleteCC.Enabled = true;
             }
         }
 
@@ -202,6 +206,7 @@ namespace FundFSAddIn
         {
             try
             {
+                ValidateExcelPath();
                 var app = Globals.ThisAddIn.Application;
                 var sel = app.Selection;
                 if (sel == null || sel.Range == null)
@@ -211,26 +216,21 @@ namespace FundFSAddIn
                 }
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
-                    if (!string.IsNullOrEmpty(cc.Tag) && cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
+                    if (!string.IsNullOrEmpty(cc.Tag))
                     {
-                        string sheet = cc.Tag;
-                        if (string.IsNullOrEmpty(_excelFilePath))
+                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
                         {
-                            MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
+                            UpdateTableContentControl(cc, cc.Tag);
                             return;
                         }
-                        ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
-                        cc.LockContents = false;
-                        // 不刪除控制項本體，只清空內容再貼上
-                        Word.Range r = cc.Range.Duplicate;
-                        r.Text = string.Empty; // 清空現有文字/物件標記
-                        r.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
-                        cc.LockContents = true;
-                        cc.LockContentControl = true;
-                        return;
+                        if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
+                        {
+                            UpdateTextContentControl(cc, cc.Tag);
+                            return;
+                        }
                     }
                 }
-                MessageBox.Show("請先選取一個附註 (表格_*)。", "提示");
+                MessageBox.Show("請先選取一個附註 (表格_* 或 文字_*)。", "提示");
             }
             catch (Exception ex)
             {
@@ -239,36 +239,76 @@ namespace FundFSAddIn
             }
         }
 
-        // 按下按鈕後，刪除選取的內容控制項
-        private void btnDeleteCC_Click(object sender, RibbonControlEventArgs e)
+        // 新增：更新全部附註 (文字 + 表格)
+        private void btnUpdateAll_Click(object sender, RibbonControlEventArgs e)
         {
             try
             {
-                var app = Globals.ThisAddIn.Application;
-                var sel = app.Selection;
-                if (sel == null || sel.Range == null)
+                ValidateExcelPath();
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                int total = 0;
+                foreach (Word.ContentControl ccAll in doc.ContentControls)
                 {
-                    MessageBox.Show("請先選取一個附註。", "提示");
-                    return;
+                    if (!string.IsNullOrEmpty(ccAll.Tag) && (ccAll.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || ccAll.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                        total++;
                 }
-                bool deleted = false;
-                foreach (Word.ContentControl cc in sel.Range.ContentControls)
+                int updated = 0;
+                foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    cc.LockContentControl = false; // 先解鎖控制項
-                    cc.LockContents = false;
-                    cc.Delete(true); // true: 刪除控制項本身與內容
-                    deleted = true;
+                    try
+                    {
+                        if (string.IsNullOrEmpty(cc.Tag)) continue;
+                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
+                        {
+                            UpdateTableContentControl(cc, cc.Tag);
+                            updated++;
+                        }
+                        else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
+                        {
+                            UpdateTextContentControl(cc, cc.Tag);
+                            updated++;
+                        }
+                    }
+                    catch (Exception exOne)
+                    {
+                        Debug.WriteLine("更新控制項失敗: " + cc.Tag + " => " + exOne.Message);
+                    }
                 }
-                if (!deleted)
-                {
-                    MessageBox.Show("請先選取一個附註。", "提示");
-                }
+                MessageBox.Show("已更新附註數量:" + updated + " 全部附註數量:" + total, "更新完成");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
                 Debug.WriteLine(ex);
             }
+        }
+
+        // 抽取：更新表格內容控制項
+        private void UpdateTableContentControl(Word.ContentControl cc, string sheetName)
+        {
+            if (string.IsNullOrEmpty(sheetName)) throw new ArgumentException("sheetName 空白", nameof(sheetName));
+            ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheetName);
+            cc.LockContents = false;
+            Word.Range r = cc.Range.Duplicate;
+            r.Text = string.Empty;
+            r.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
+            cc.LockContents = true;
+            cc.LockContentControl = true;
+        }
+
+        // 抽取：更新文字內容控制項
+        private void UpdateTextContentControl(Word.ContentControl cc, string definedName)
+        {
+            if (string.IsNullOrEmpty(definedName)) throw new ArgumentException("definedName 空白", nameof(definedName));
+            string val = GetExcelDefinedNameValue(_excelFilePath, definedName);
+            if (val == null)
+            {
+                throw new Exception("找不到名稱值: " + definedName);
+            }
+            cc.LockContents = false;
+            cc.Range.Text = val;
+            cc.LockContents = true;
+            cc.LockContentControl = true;
         }
 
         // 取得帶有 "文字_" 前綴的已定義名稱列表
@@ -433,6 +473,38 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 Debug.WriteLine("ReleaseCom 失敗: " + ex.Message);
+            }
+        }
+
+        // 按下按鈕後，刪除選取的內容控制項 (補回遺失的方法)
+        private void btnDeleteCC_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                var app = Globals.ThisAddIn.Application;
+                var sel = app.Selection;
+                if (sel == null || sel.Range == null)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                bool deleted = false;
+                foreach (Word.ContentControl cc in sel.Range.ContentControls)
+                {
+                    cc.LockContentControl = false;
+                    cc.LockContents = false;
+                    cc.Delete(true);
+                    deleted = true;
+                }
+                if (!deleted)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
             }
         }
     }

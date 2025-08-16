@@ -44,6 +44,7 @@
             this.btnGoToExcel = this.Factory.CreateRibbonButton();
             this.group_edit = this.Factory.CreateRibbonGroup();
             this.btnUpdateOne = this.Factory.CreateRibbonButton();
+            this.btnUpdateAll = this.Factory.CreateRibbonButton();
             this.btnDeleteCC = this.Factory.CreateRibbonButton();
             this.group_setting = this.Factory.CreateRibbonGroup();
             this.btnSetExcelFilePath = this.Factory.CreateRibbonButton();
@@ -121,6 +122,7 @@
             // group_edit
             // 
             this.group_edit.Items.Add(this.btnUpdateOne);
+            this.group_edit.Items.Add(this.btnUpdateAll);
             this.group_edit.Items.Add(this.btnDeleteCC);
             this.group_edit.Name = "group_edit";
             // 
@@ -132,6 +134,15 @@
             this.btnUpdateOne.Name = "btnUpdateOne";
             this.btnUpdateOne.ShowImage = true;
             this.btnUpdateOne.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnUpdateOne_Click);
+            // 
+            // btnUpdateAll
+            // 
+            this.btnUpdateAll.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.btnUpdateAll.Image = global::FundFSAddIn.Properties.Resources.icon_refresh;
+            this.btnUpdateAll.Label = "更新全部附註";
+            this.btnUpdateAll.Name = "btnUpdateAll";
+            this.btnUpdateAll.ShowImage = true;
+            this.btnUpdateAll.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnUpdateAll_Click);
             // 
             // btnDeleteCC
             // 
@@ -201,6 +212,7 @@
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnSetExcelFilePath;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnGoToExcel;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnUpdateOne;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton btnUpdateAll;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnDeleteCC;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group_edit;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group_setting;
