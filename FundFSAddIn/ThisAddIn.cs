@@ -7,44 +7,14 @@ namespace FundFSAddIn
 {
     public partial class ThisAddIn
     {
-        private string _lastExcelFilePath = null;
+        
 
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
-            this.Application.WindowBeforeDoubleClick += Application_WindowBeforeDoubleClick;
         }
 
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
-        }
-
-        private void Application_WindowBeforeDoubleClick(Word.Selection Sel, ref bool Cancel)
-        {
-            if (Sel == null || Sel.Range == null) return;
-            foreach (Word.ContentControl cc in Sel.Range.ContentControls)
-            {
-                // 只處理插入的圖片內容控制項（Tag 為工作表名稱）
-                if (!string.IsNullOrEmpty(cc.Tag))
-                {
-                    string sheet = cc.Tag;
-                    string file = _lastExcelFilePath;
-                    if (string.IsNullOrEmpty(file))
-                    {
-                        MessageBox.Show("無法取得來源 Excel 檔案路徑，請先插入一次內容控制項。", "錯誤");
-                        return;
-                    }
-                    try
-                    {
-                        OpenExcelAndActivateSheet(file, sheet);
-                        Cancel = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("無法開啟 Excel 或工作表：\r\n" + ex.Message);
-                    }
-                    break;
-                }
-            }
         }
 
         public void OpenExcelAndActivateSheet(string filePath, string sheetName)
@@ -75,10 +45,6 @@ namespace FundFSAddIn
             }
         }
 
-        public string GetLastExcelFilePath()
-        {
-            return _lastExcelFilePath;
-        }
 
         #region VSTO 產生的程式碼
         /// <summary>

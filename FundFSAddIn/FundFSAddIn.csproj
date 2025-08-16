@@ -202,6 +202,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <EmbeddedResource Include="Ribbon.resx">
       <DependentUpon>Ribbon.cs</DependentUpon>
@@ -232,6 +233,21 @@
       <DependentUpon>ThisAddIn.Designer.xml</DependentUpon>
     </Compile>
     <AppDesigner Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icon_sheet.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icon_table.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icon_text.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icon_send.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icon_refresh_1.png" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

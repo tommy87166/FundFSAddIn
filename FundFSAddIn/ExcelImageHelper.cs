@@ -24,7 +24,6 @@ namespace FundFSAddIn
                 // 若不是標準檢視，切換到標準檢視
                 if (originalView != Excel.XlWindowView.xlNormalView)
                     ws.Application.ActiveWindow.View = Excel.XlWindowView.xlNormalView;
-
                 Excel.Range rng = GetPrintArea(ws);
                 rng.CopyPicture(Excel.XlPictureAppearance.xlScreen, Excel.XlCopyPictureFormat.xlPicture);
 

@@ -14,22 +14,61 @@ namespace FundFSAddIn
 
         private void Ribbon_Load(object sender, RibbonUIEventArgs e)
         {
-
+            UpdateExcelFileNameLabel();
         }
 
-        private void btnInsert_Click(object sender, RibbonControlEventArgs e)
+        // 按下按鈕後，開啟檔案對話框選擇 Excel 附註檔
+        private void btnSetExcelFilePath_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                var ofd = new OpenFileDialog
+                {
+                    Title = "選擇 Excel 檔案",
+                    Filter = "Excel 檔案|*.xlsx;*.xlsm;*.xls"
+                };
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    _excelFilePath = ofd.FileName;
+                    UpdateExcelFileNameLabel();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+            }
+        }
+
+        // 更新顯示的 Excel 檔案名稱標籤
+        private void UpdateExcelFileNameLabel()
+        {
+            if (string.IsNullOrEmpty(_excelFilePath))
+            {
+                lblExcelFileName.Label = "尚未指定附註檔";
+                btnInsertTable.Enabled = false;
+                btnInsertText.Enabled = false;
+                btnGoToExcel.Enabled = false;
+                btnUpdateOne.Enabled = false;
+            }
+            else
+            {
+                var fileName = System.IO.Path.GetFileNameWithoutExtension(_excelFilePath);
+                lblExcelFileName.Label = "附註檔:" + fileName;
+                btnInsertTable.Enabled = true;
+                btnInsertText.Enabled = true;
+                btnGoToExcel.Enabled = true;
+                btnUpdateOne.Enabled = true;
+            }
+        }
+
+        // 按下按鈕後，插入 Excel 附註檔中的表格圖片到 Word 文件
+        private void btnInsertTable_Click(object sender, RibbonControlEventArgs e)
         {
             try
             {
                 if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
                 {
-                    var ofd = new OpenFileDialog
-                    {
-                        Title = "選擇 Excel 檔案",
-                        Filter = "Excel 檔案|*.xlsx;*.xlsm;*.xls"
-                    };
-                    if (ofd.ShowDialog() != DialogResult.OK) return;
-                    _excelFilePath = ofd.FileName;
+                    throw new Exception("未指定附註檔");
                 }
 
                 var sheets = GetExcelSheetNames(_excelFilePath);
@@ -38,21 +77,12 @@ namespace FundFSAddIn
                     MessageBox.Show("找不到任何工作表。", "錯誤");
                     return;
                 }
-
+                //選取附註檔中的工作表
                 string sheet = ShowSheetSelectDialog(sheets);
                 if (string.IsNullOrWhiteSpace(sheet)) return;
-
                 // 直接用工作表名稱作為內容控制項名稱
                 string tag = sheet;
-
-                // 更新 ThisAddIn 的 _lastExcelFilePath 供雙擊時使用
-                var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
-                if (thisAddIn != null)
-                {
-                    var field = typeof(FundFSAddIn.ThisAddIn).GetField("_lastExcelFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (field != null) field.SetValue(thisAddIn, _excelFilePath);
-                }
-
+                //插入附註圖片到 Word 文件
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
                 ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
                 Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
@@ -69,8 +99,7 @@ namespace FundFSAddIn
             }
         }
 
-
-        // 取得 Excel 檔案的所有工作表名稱
+        // 取得帶有 "表格_" 前綴的工作表名稱列表
         private List<string> GetExcelSheetNames(string filePath)
         {
             var list = new List<string>();
@@ -82,7 +111,10 @@ namespace FundFSAddIn
                 wb = excel.Workbooks.Open(filePath, ReadOnly: true);
                 foreach (Excel.Worksheet ws in wb.Sheets)
                 {
-                    list.Add(ws.Name);
+                    if (ws.Name.StartsWith("表格_"))
+                    {
+                        list.Add(ws.Name);
+                    }
                 }
             }
             catch { }
@@ -116,6 +148,7 @@ namespace FundFSAddIn
             return null;
         }
 
+        // 按下按鈕後，開啟 Excel 並跳轉到對應工作表
         private void btnGoToExcel_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -124,7 +157,7 @@ namespace FundFSAddIn
                 var sel = app.Selection;
                 if (sel == null || sel.Range == null)
                 {
-                    MessageBox.Show("請先選取一個內容控制項。", "提示");
+                    MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
@@ -133,17 +166,16 @@ namespace FundFSAddIn
                     {
                         string sheet = cc.Tag;
                         var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
-                        var file = thisAddIn?.GetLastExcelFilePath();
-                        if (string.IsNullOrEmpty(file))
+                        if (string.IsNullOrEmpty(_excelFilePath))
                         {
-                            MessageBox.Show("無法取得來源 Excel 檔案路徑，請先插入一次內容控制項。", "錯誤");
+                            MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
                             return;
                         }
-                        thisAddIn.OpenExcelAndActivateSheet(file, sheet);
+                        thisAddIn.OpenExcelAndActivateSheet(_excelFilePath, sheet);
                         return;
                     }
                 }
-                MessageBox.Show("請先選取一個內容控制項。", "提示");
+                MessageBox.Show("請先選取一個附註。", "提示");
             }
             catch (Exception ex)
             {
@@ -151,7 +183,8 @@ namespace FundFSAddIn
             }
         }
 
-        private void btnUpdatePicture_Click(object sender, RibbonControlEventArgs e)
+        // 按下按鈕後，更新選取的內容控制項圖片
+        private void btnUpdateOne_Click(object sender, RibbonControlEventArgs e)
         {
             try
             {
@@ -159,7 +192,7 @@ namespace FundFSAddIn
                 var sel = app.Selection;
                 if (sel == null || sel.Range == null)
                 {
-                    MessageBox.Show("請先選取一個內容控制項。", "提示");
+                    MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
@@ -167,29 +200,30 @@ namespace FundFSAddIn
                     if (!string.IsNullOrEmpty(cc.Tag))
                     {
                         string sheet = cc.Tag;
-                        var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
-                        var file = thisAddIn?.GetLastExcelFilePath();
-                        if (string.IsNullOrEmpty(file))
+                        if (string.IsNullOrEmpty(_excelFilePath))
                         {
-                            MessageBox.Show("無法取得來源 Excel 檔案路徑，請先插入一次內容控制項。", "錯誤");
+                            MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
                             return;
                         }
                         // 取得最新圖片到剪貼簿
-                        ExcelImageHelper.CopyPrintAreaToClipboard(file, sheet);
+                        ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheet);
                         cc.LockContents = false;
                         cc.Range.Delete();
                         cc.Range.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
                         cc.LockContents = true;
-                        MessageBox.Show("已更新圖片。", "成功");
                         return;
                     }
                 }
-                MessageBox.Show("請先選取一個內容控制項。", "提示");
+                MessageBox.Show("請先選取一個附註。", "提示");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
             }
         }
+
+        
+
+
     }
 }
