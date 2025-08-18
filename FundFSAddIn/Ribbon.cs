@@ -46,7 +46,7 @@ namespace FundFSAddIn
                 Visible = false,
                 DisplayAlerts = false
             };
-            _sharedWorkbook = _sharedExcelApp.Workbooks.Open(_excelFilePath, ReadOnly: true);
+            _sharedWorkbook = _sharedExcelApp.Workbooks.Open(_excelFilePath, ReadOnly: false);
         }
 
         // 釋放共用資源
@@ -94,35 +94,55 @@ namespace FundFSAddIn
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
+        private static void ReleaseCom(object o)
+        {
+            try
+            {
+                if (o != null && Marshal.IsComObject(o))
+                    Marshal.ReleaseComObject(o);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ReleaseCom 失敗: " + ex.Message);
+            }
+        }
 
+        //載入Ribbon
         private void Ribbon_Load(object sender, RibbonUIEventArgs e)
         {
             UpdateExcelFileNameLabel();
         }
-
         private void UpdateExcelFileNameLabel()
         {
             if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
             {
-                lblExcelFileName.Label = "尚未指定附註檔";
+                lblExcelFileName.Label = " ❌  尚未指定附註檔";
                 btnInsertTable.Enabled = false;
                 btnInsertText.Enabled = false;
                 btnGoToExcel.Enabled = false;
                 btnUpdateOne.Enabled = false;
                 btnUpdateAll.Enabled = false;
                 btnDeleteCC.Enabled = false;
+                btnRemapLinks.Enabled = false;
             }
             else
             {
                 var fileName = System.IO.Path.GetFileNameWithoutExtension(_excelFilePath);
-                lblExcelFileName.Label = "附註檔:" + fileName;
+                lblExcelFileName.Label = " ✔️  已開啟附註檔(" + fileName+")";
                 btnInsertTable.Enabled = true;
-                btnInsertText.Enabled = true;
+                btnInsertText .Enabled = true;
                 btnGoToExcel.Enabled = true;
                 btnUpdateOne.Enabled = true;
                 btnUpdateAll.Enabled = true;
                 btnDeleteCC.Enabled = true;
+                btnRemapLinks.Enabled = true;
             }
+        }
+
+        private void ValidateExcelPath()
+        {
+            if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
+                throw new Exception("未指定附註檔");
         }
 
         private void btnSetExcelFilePath_Click(object sender, RibbonControlEventArgs e)
@@ -189,6 +209,13 @@ namespace FundFSAddIn
                         Link: true,
                         Placement: Word.WdOLEPlacement.wdInLine,
                         DisplayAsIcon: false);
+                    foreach (Word.InlineShape shape in cc.Range.InlineShapes)
+                    {
+                        if (shape.Type == Word.WdInlineShapeType.wdInlineShapeLinkedOLEObject && shape.LinkFormat != null)
+                        {
+                            shape.LinkFormat.AutoUpdate = false;
+                        }
+                    }
                     cc.Range.Font.Reset();
                     cc.Range.Bold = 0;
                     cc.Range.Italic = 0;
@@ -273,14 +300,92 @@ namespace FundFSAddIn
                 {
                     if (!string.IsNullOrEmpty(cc.Tag))
                     {
-                        string sheet = cc.Tag;
+                        string nameOrSheet = cc.Tag;
                         if (string.IsNullOrEmpty(_excelFilePath))
                         {
                             MessageBox.Show("無法取得附註檔Excel路徑。", "錯誤");
                             return;
                         }
-                        var thisAddIn = Globals.ThisAddIn as FundFSAddIn.ThisAddIn;
-                        thisAddIn.OpenExcelAndActivateSheet(_excelFilePath, sheet);
+
+                        EnsureWorkbook();
+                        _sharedExcelApp.Visible = true;
+
+                        if (nameOrSheet.StartsWith(TablePrefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // 表格_：直接啟動對應工作表
+                            Excel.Worksheet ws = null;
+                            foreach (Excel.Worksheet s in _sharedWorkbook.Sheets)
+                            {
+                                if (string.Equals(s.Name, nameOrSheet, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    ws = s;
+                                    break;
+                                }
+                            }
+                            if (ws == null)
+                            {
+                                MessageBox.Show("找不到指定工作表：" + nameOrSheet, "錯誤");
+                                return;
+                            }
+                            ws.Activate();
+                        }
+                        else if (nameOrSheet.StartsWith(TextPrefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // 文字_：啟動對應名稱的儲存格
+                            bool found = false;
+                            foreach (Excel.Name n in _sharedWorkbook.Names)
+                            {
+                                if (n.Name == nameOrSheet)
+                                {
+                                    var refersTo = n.RefersTo;
+                                    string sheetName = null;
+                                    string cellAddress = null;
+                                    var match = System.Text.RegularExpressions.Regex.Match(refersTo, @"=([^!]+)!([$A-Z0-9:]+)");
+                                    if (match.Success)
+                                    {
+                                        sheetName = match.Groups[1].Value.Replace("'", "");
+                                        cellAddress = match.Groups[2].Value;
+                                    }
+                                    if (!string.IsNullOrEmpty(sheetName))
+                                    {
+                                        Excel.Worksheet ws = null;
+                                        foreach (Excel.Worksheet s in _sharedWorkbook.Sheets)
+                                        {
+                                            if (string.Equals(s.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                ws = s;
+                                                break;
+                                            }
+                                        }
+                                        if (ws != null)
+                                        {
+                                            ws.Activate();
+                                            ws.Application.Goto(ws.Range[cellAddress]);
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!found)
+                            {
+                                MessageBox.Show("找不到對應的 Excel 名稱或範圍：" + nameOrSheet, "錯誤");
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show("不支援的前綴，需為 表格_ 或 文字_：" + nameOrSheet, "錯誤");
+                            return;
+                        }
+
+                        // 將 Excel 視窗帶到前景
+                        _sharedExcelApp.WindowState = Excel.XlWindowState.xlNormal;
+                        IntPtr hwnd = (IntPtr)_sharedExcelApp.Hwnd;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            NativeMethods.SetForegroundWindow(hwnd);
+                        }
                         return;
                     }
                 }
@@ -292,6 +397,250 @@ namespace FundFSAddIn
                 Debug.WriteLine(ex);
             }
         }
+
+        private List<string> GetExcelTextDefinedNames(string filePath)
+        {
+            var list = new List<string>();
+            try
+            {
+                EnsureWorkbook();
+                foreach (Excel.Name name in _sharedWorkbook.Names)
+                {
+                    try
+                    {
+                        if (name != null && name.Name.StartsWith(TextPrefix, StringComparison.Ordinal))
+                            list.Add(name.Name);
+                    }
+                    finally
+                    {
+                        ReleaseCom(name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
+            return list;
+        }
+
+        private string ShowTextNameSelectDialog(List<string> names)
+        {
+            using (var form = new Form())
+            {
+                form.Text = "選擇文字名稱";
+                form.Width = 300;
+                form.Height = 180;
+                var listBox = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
+                listBox.Items.AddRange(names.ToArray());
+                form.Controls.Add(listBox);
+                var btnOK = new Button { Text = "確定", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK };
+                form.Controls.Add(btnOK);
+                form.AcceptButton = btnOK;
+                if (form.ShowDialog() == DialogResult.OK && listBox.SelectedItem != null)
+                    return listBox.SelectedItem.ToString();
+            }
+            return null;
+        }
+
+        private void btnDeleteCC_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                var app = Globals.ThisAddIn.Application;
+                var sel = app.Selection;
+                if (sel == null || sel.Range == null)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                bool deleted = false;
+                foreach (Word.ContentControl cc in sel.Range.ContentControls)
+                {
+                    cc.LockContentControl = false;
+                    cc.LockContents = false;
+                    cc.Delete(true);
+                    deleted = true;
+                }
+                if (!deleted)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
+            }
+        }
+
+        private void btnRemapLinks_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                ValidateExcelPath();
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                int updated = 0;
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    foreach (Word.InlineShape shape in cc.Range.InlineShapes)
+                    {
+                        if (shape.Type == Word.WdInlineShapeType.wdInlineShapeLinkedOLEObject && shape.LinkFormat != null)
+                        {
+                            try
+                            {
+                                // 只處理來源為 Excel 的 OLE 物件
+                                string oldSource = shape.LinkFormat.SourceFullName;
+                                if (!string.IsNullOrEmpty(oldSource) && oldSource.EndsWith(".xls", StringComparison.OrdinalIgnoreCase) ||
+                                    oldSource.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+                                    oldSource.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // 只更換路徑，保留原有的 Sheet 與 Range
+                                    string newSource = _excelFilePath;
+                                    shape.LinkFormat.SourceFullName = newSource;
+                                    updated++;
+                                }
+                            }
+                            catch (Exception exOne)
+                            {
+                                Debug.WriteLine("重新 mapping 失敗: " + exOne.Message);
+                            }
+                        }
+                    }
+                }
+                MessageBox.Show("已重新 mapping 連結數量: " + updated, "完成");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
+            }
+        }
+
+        private string GetExcelDefinedNameValue(string filePath, string name)
+        {
+            try
+            {
+                if (!string.Equals(filePath, _excelFilePath, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("傳入的檔案路徑與目前已載入的路徑不一致。");
+                EnsureWorkbook();
+                foreach (Excel.Name n in _sharedWorkbook.Names)
+                {
+                    try
+                    {
+                        if (n != null && n.Name == name)
+                        {
+                            Excel.Range range = null;
+                            try
+                            {
+                                range = n.RefersToRange;
+                                if (range != null)
+                                {
+                                    object val = range.Value2;
+                                    return val?.ToString();
+                                }
+                            }
+                            finally
+                            {
+                                ReleaseCom(range);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        ReleaseCom(n);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
+            return null;
+        }
+        //OK
+        //P
+        private void btnInsertText_Click(object sender, RibbonControlEventArgs e)
+        {
+            try
+            {
+                ValidateExcelPath();
+                var names = GetExcelTextDefinedNames(_excelFilePath);
+                if (names == null || names.Count == 0)
+                {
+                    MessageBox.Show("找不到任何文字定義名稱。", "錯誤");
+                    return;
+                }
+                string name = ShowTextNameSelectDialog(names);
+                if (string.IsNullOrWhiteSpace(name)) return;
+
+                // 取得 Excel 範圍
+                EnsureWorkbook();
+                Excel.Name excelName = null;
+                Excel.Range range = null;
+                try
+                {
+                    foreach (Excel.Name n in _sharedWorkbook.Names)
+                    {
+                        if (n != null && n.Name == name)
+                        {
+                            excelName = n;
+                            range = n.RefersToRange;
+                            break;
+                        }
+                    }
+                    if (range == null)
+                    {
+                        MessageBox.Show("無法取得名稱對應的範圍。", "錯誤");
+                        return;
+                    }
+                    range.Copy();
+                }
+                finally
+                {
+                    ReleaseCom(range);
+                    ReleaseCom(excelName);
+                }
+
+                // 插入 Word 內容控制項並貼上 OLE 物件
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
+                wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+                Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
+                cc.Tag = name;
+                cc.Title = name;
+                // 貼上 OLE 物件並合併格式
+                cc.Range.PasteSpecial(
+                    DataType: Word.WdPasteDataType.wdPasteRTF,
+                    Link: true,
+                    Placement: Word.WdOLEPlacement.wdInLine,
+                    DisplayAsIcon: false);
+                foreach (Word.InlineShape shape in cc.Range.InlineShapes)
+                {
+                    if (shape.LinkFormat != null)
+                    {
+                        shape.LinkFormat.AutoUpdate = false;
+                    }
+                }
+                cc.LockContents = true;
+                cc.LockContentControl = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
+            }
+        }
+
+
+
+
+
+
+
+
+
+        //OK
 
         private void btnUpdateOne_Click(object sender, RibbonControlEventArgs e)
         {
@@ -402,183 +751,13 @@ namespace FundFSAddIn
             cc.LockContentControl = true;
         }
 
-        private List<string> GetExcelTextDefinedNames(string filePath)
-        {
-            var list = new List<string>();
-            try
-            {
-                EnsureWorkbook();
-                foreach (Excel.Name name in _sharedWorkbook.Names)
-                {
-                    try
-                    {
-                        if (name != null && name.Name.StartsWith(TextPrefix, StringComparison.Ordinal))
-                            list.Add(name.Name);
-                    }
-                    finally
-                    {
-                        ReleaseCom(name);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-            }
-            return list;
-        }
-
-        private void btnInsertText_Click(object sender, RibbonControlEventArgs e)
-        {
-            try
-            {
-                ValidateExcelPath();
-                var names = GetExcelTextDefinedNames(_excelFilePath);
-                if (names == null || names.Count == 0)
-                {
-                    MessageBox.Show("找不到任何文字定義名稱。", "錯誤");
-                    return;
-                }
-                string name = ShowTextNameSelectDialog(names);
-                if (string.IsNullOrWhiteSpace(name)) return;
-
-                string value = GetExcelDefinedNameValue(_excelFilePath, name);
-                if (value == null)
-                {
-                    MessageBox.Show("無法取得名稱值。", "錯誤");
-                    return;
-                }
-                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
-                wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
-                Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
-                cc.Tag = name;
-                cc.Title = name;
-                cc.Range.Text = value;
-                cc.LockContents = true;
-                cc.LockContentControl = true;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
-            }
-        }
-
-        private string GetExcelDefinedNameValue(string filePath, string name)
-        {
-            try
-            {
-                if (!string.Equals(filePath, _excelFilePath, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("傳入的檔案路徑與目前已載入的路徑不一致。");
-                EnsureWorkbook();
-                foreach (Excel.Name n in _sharedWorkbook.Names)
-                {
-                    try
-                    {
-                        if (n != null && n.Name == name)
-                        {
-                            Excel.Range range = null;
-                            try
-                            {
-                                range = n.RefersToRange;
-                                if (range != null)
-                                {
-                                    object val = range.Value2;
-                                    return val?.ToString();
-                                }
-                            }
-                            finally
-                            {
-                                ReleaseCom(range);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        ReleaseCom(n);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-            }
-            return null;
-        }
-
-        private string ShowTextNameSelectDialog(List<string> names)
-        {
-            using (var form = new Form())
-            {
-                form.Text = "選擇文字名稱";
-                form.Width = 300;
-                form.Height = 180;
-                var listBox = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
-                listBox.Items.AddRange(names.ToArray());
-                form.Controls.Add(listBox);
-                var btnOK = new Button { Text = "確定", Dock = DockStyle.Bottom, DialogResult = DialogResult.OK };
-                form.Controls.Add(btnOK);
-                form.AcceptButton = btnOK;
-                if (form.ShowDialog() == DialogResult.OK && listBox.SelectedItem != null)
-                    return listBox.SelectedItem.ToString();
-            }
-            return null;
-        }
-
-        private void ValidateExcelPath()
-        {
-            if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
-                throw new Exception("未指定附註檔");
-        }
-
-        private static void ReleaseCom(object o)
-        {
-            try
-            {
-                if (o != null && Marshal.IsComObject(o))
-                    Marshal.ReleaseComObject(o);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("ReleaseCom 失敗: " + ex.Message);
-            }
-        }
-
-        private void btnDeleteCC_Click(object sender, RibbonControlEventArgs e)
-        {
-            try
-            {
-                var app = Globals.ThisAddIn.Application;
-                var sel = app.Selection;
-                if (sel == null || sel.Range == null)
-                {
-                    MessageBox.Show("請先選取一個附註。", "提示");
-                    return;
-                }
-                bool deleted = false;
-                foreach (Word.ContentControl cc in sel.Range.ContentControls)
-                {
-                    cc.LockContentControl = false;
-                    cc.LockContents = false;
-                    cc.Delete(true);
-                    deleted = true;
-                }
-                if (!deleted)
-                {
-                    MessageBox.Show("請先選取一個附註。", "提示");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
-            }
-        }
-
-        
         
 
+        
+
+        
+
+        
         
     }
 }
