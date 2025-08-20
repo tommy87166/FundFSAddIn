@@ -1,12 +1,13 @@
-﻿using Word = Microsoft.Office.Interop.Word;
+﻿using Microsoft.Office.Interop.Word;
 using Microsoft.Office.Tools.Ribbon;
-using System;
-using System.Windows.Forms;
 using Microsoft.VisualBasic;
+using System;
 using System.Collections.Generic;
-using Excel = Microsoft.Office.Interop.Excel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using Excel = Microsoft.Office.Interop.Excel;
+using Word = Microsoft.Office.Interop.Word;
 
 namespace FundFSAddIn
 {
@@ -169,7 +170,6 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -236,7 +236,6 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -261,7 +260,7 @@ namespace FundFSAddIn
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex);
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
             }
             return list;
         }
@@ -394,7 +393,6 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -419,7 +417,7 @@ namespace FundFSAddIn
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex);
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
             }
             return list;
         }
@@ -470,50 +468,7 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
-        }
-
-        private string GetExcelDefinedNameValue(string filePath, string name)
-        {
-            try
-            {
-                if (!string.Equals(filePath, _excelFilePath, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("傳入的檔案路徑與目前已載入的路徑不一致。");
-                EnsureWorkbook();
-                foreach (Excel.Name n in _sharedWorkbook.Names)
-                {
-                    try
-                    {
-                        if (n != null && n.Name == name)
-                        {
-                            Excel.Range range = null;
-                            try
-                            {
-                                range = n.RefersToRange;
-                                if (range != null)
-                                {
-                                    object val = range.Value2;
-                                    return val?.ToString();
-                                }
-                            }
-                            finally
-                            {
-                                ReleaseCom(range);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        ReleaseCom(n);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-            }
-            return null;
         }
        
         private void btnInsertText_Click(object sender, RibbonControlEventArgs e)
@@ -584,7 +539,6 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -600,37 +554,23 @@ namespace FundFSAddIn
                     MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
-                bool updated = false;
                 int updatedCount = 0;
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
                     foreach (Word.Field field in cc.Range.Fields)
                     {
-                        try
+                        if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
                         {
                             field.Update();
                             updatedCount++;
-                            updated = true;
-                        }
-                        catch (Exception ex2)
-                        {
-                            Debug.WriteLine("更新 Field 失敗: " + ex2.Message);
                         }
                     }
                 }
-                if (updated)
-                {
-                    MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
-                }
-                else
-                {
-                    MessageBox.Show("沒有可以更新的附註。", "提示");
-                }
+                MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -640,42 +580,22 @@ namespace FundFSAddIn
             {
                 ValidateExcelPath();
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int total = 0;
-                foreach (Word.ContentControl ccAll in doc.ContentControls)
-                {
-                    if (!string.IsNullOrEmpty(ccAll.Tag) &&
-                        (ccAll.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
-                         ccAll.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
-                        total++;
-                }
-                int updated = 0;
+                int updatedCount = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    try
-                    {
-                        if (string.IsNullOrEmpty(cc.Tag)) continue;
-                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
-                        {
-                            
-                            updated++;
+                    foreach (Word.Field field in cc.Range.Fields)
+                        {   
+                            if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))) {
+                                field.Update();
+                                updatedCount++;
+                            }
                         }
-                        else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
-                        {
-                            
-                            updated++;
-                        }
-                    }
-                    catch (Exception exOne)
-                    {
-                        Debug.WriteLine("更新控制項失敗: " + cc.Tag + " => " + exOne.Message);
-                    }
                 }
-                MessageBox.Show("已更新附註數量:" + updated + " 全部附註數量:" + total, "更新完成");
+                MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
@@ -693,8 +613,7 @@ namespace FundFSAddIn
                     cc.LockContents = false;
                     foreach (Word.Field field in cc.Range.Fields)
                     {
-                        try
-                        {
+
                             if (field.Type == Word.WdFieldType.wdFieldLink)
                             {
                                 string code = field.Code.Text;
@@ -724,11 +643,7 @@ namespace FundFSAddIn
                                     }
                                 }
                             }
-                        }
-                        catch (Exception exField)
-                        {
-                            Debug.WriteLine("重新 mapping Field 失敗: " + exField.Message);
-                        }
+
                     }
                     cc.LockContents = true;
                 }
@@ -738,7 +653,6 @@ namespace FundFSAddIn
             catch (Exception ex)
             {
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
             }
         }
 
