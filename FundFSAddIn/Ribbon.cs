@@ -474,49 +474,6 @@ namespace FundFSAddIn
             }
         }
 
-        private void btnRemapLinks_Click(object sender, RibbonControlEventArgs e)
-        {
-            try
-            {
-                ValidateExcelPath();
-                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int updated = 0;
-                foreach (Word.ContentControl cc in doc.ContentControls)
-                {
-                    foreach (Word.InlineShape shape in cc.Range.InlineShapes)
-                    {
-                        if (shape.Type == Word.WdInlineShapeType.wdInlineShapeLinkedOLEObject && shape.LinkFormat != null)
-                        {
-                            try
-                            {
-                                // 只處理來源為 Excel 的 OLE 物件
-                                string oldSource = shape.LinkFormat.SourceFullName;
-                                if (!string.IsNullOrEmpty(oldSource) && oldSource.EndsWith(".xls", StringComparison.OrdinalIgnoreCase) ||
-                                    oldSource.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-                                    oldSource.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    // 只更換路徑，保留原有的 Sheet 與 Range
-                                    string newSource = _excelFilePath;
-                                    shape.LinkFormat.SourceFullName = newSource;
-                                    updated++;
-                                }
-                            }
-                            catch (Exception exOne)
-                            {
-                                Debug.WriteLine("重新 mapping 失敗: " + exOne.Message);
-                            }
-                        }
-                    }
-                }
-                MessageBox.Show("已重新 mapping 連結數量: " + updated, "完成");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
-                Debug.WriteLine(ex);
-            }
-        }
-
         private string GetExcelDefinedNameValue(string filePath, string name)
         {
             try
@@ -558,8 +515,7 @@ namespace FundFSAddIn
             }
             return null;
         }
-        //OK
-        //P
+       
         private void btnInsertText_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -615,11 +571,11 @@ namespace FundFSAddIn
                     Link: true,
                     Placement: Word.WdOLEPlacement.wdInLine,
                     DisplayAsIcon: false);
-                foreach (Word.InlineShape shape in cc.Range.InlineShapes)
+                foreach (Word.Field field in cc.Range.Fields)
                 {
-                    if (shape.LinkFormat != null)
+                    if (field.LinkFormat != null)
                     {
-                        shape.LinkFormat.AutoUpdate = false;
+                        field.LinkFormat.AutoUpdate = false;
                     }
                 }
                 cc.LockContents = true;
@@ -631,16 +587,6 @@ namespace FundFSAddIn
                 Debug.WriteLine(ex);
             }
         }
-
-
-
-
-
-
-
-
-
-        //OK
 
         private void btnUpdateOne_Click(object sender, RibbonControlEventArgs e)
         {
@@ -654,23 +600,32 @@ namespace FundFSAddIn
                     MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
+                bool updated = false;
+                int updatedCount = 0;
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
-                    if (!string.IsNullOrEmpty(cc.Tag))
+                    foreach (Word.Field field in cc.Range.Fields)
                     {
-                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
+                        try
                         {
-                            UpdateTableContentControl(cc, cc.Tag);
-                            return;
+                            field.Update();
+                            updatedCount++;
+                            updated = true;
                         }
-                        if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
+                        catch (Exception ex2)
                         {
-                            UpdateTextContentControl(cc, cc.Tag);
-                            return;
+                            Debug.WriteLine("更新 Field 失敗: " + ex2.Message);
                         }
                     }
                 }
-                MessageBox.Show("請先選取一個附註 (表格_* 或 文字_*)。", "提示");
+                if (updated)
+                {
+                    MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
+                }
+                else
+                {
+                    MessageBox.Show("沒有可以更新的附註。", "提示");
+                }
             }
             catch (Exception ex)
             {
@@ -701,12 +656,12 @@ namespace FundFSAddIn
                         if (string.IsNullOrEmpty(cc.Tag)) continue;
                         if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
                         {
-                            UpdateTableContentControl(cc, cc.Tag);
+                            
                             updated++;
                         }
                         else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
                         {
-                            UpdateTextContentControl(cc, cc.Tag);
+                            
                             updated++;
                         }
                     }
@@ -724,40 +679,91 @@ namespace FundFSAddIn
             }
         }
 
-        private void UpdateTableContentControl(Word.ContentControl cc, string sheetName)
+        private void btnRemapLinks_Click(object sender, RibbonControlEventArgs e)
         {
-            if (string.IsNullOrEmpty(sheetName)) throw new ArgumentException("sheetName 空白", nameof(sheetName));
-            // 注意：ExcelImageHelper 內部若再開 Excel 仍會產生額外實例，需考慮也改造成共用。
-            ExcelImageHelper.CopyPrintAreaToClipboard(_excelFilePath, sheetName);
-            cc.LockContents = false;
-            Word.Range r = cc.Range.Duplicate;
-            r.Text = string.Empty;
-            r.PasteSpecial(Word.WdPasteDataType.wdPasteEnhancedMetafile);
-            cc.LockContents = true;
-            cc.LockContentControl = true;
-        }
-
-        private void UpdateTextContentControl(Word.ContentControl cc, string definedName)
-        {
-            if (string.IsNullOrEmpty(definedName)) throw new ArgumentException("definedName 空白", nameof(definedName));
-            string val = GetExcelDefinedNameValue(_excelFilePath, definedName);
-            if (val == null)
+            try
             {
-                throw new Exception("找不到名稱值: " + definedName);
+                ValidateExcelPath();
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                int updatedField = 0;
+                string escapedPath = EscapePathForLinkField(_excelFilePath); // 轉義路徑（雙反斜線）
+
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    cc.LockContents = false;
+                    foreach (Word.Field field in cc.Range.Fields)
+                    {
+                        try
+                        {
+                            if (field.Type == Word.WdFieldType.wdFieldLink)
+                            {
+                                string code = field.Code.Text;
+                                // 找出第一個被引號包住且副檔名為 xls/xlsx/xlsm 的路徑
+                                var match = System.Text.RegularExpressions.Regex.Match(
+                                    code,
+                                    "\"([^\"]+\\.(?:xls|xlsx|xlsm))\"",
+                                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                                if (match.Success)
+                                {
+                                    string oldPathRaw = match.Groups[1].Value; // 可能是已經含有雙反斜線的版本
+                                                                               // 若舊路徑與目前路徑（未轉義原始值比較）不同才替換
+                                    if (!string.Equals(NormalizePathForCompare(oldPathRaw), _excelFilePath, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        // 用 Regex.Replace 指定第一個符合的引號包住的路徑整段替換
+                                        string newCode = System.Text.RegularExpressions.Regex.Replace(
+                                            code,
+                                            "\"([^\"]+\\.(?:xls|xlsx|xlsm))\"",
+                                            "\"" + escapedPath + "\"",
+                                            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                                        );
+
+                                        field.Code.Text = newCode;
+                                        field.Update();
+                                        updatedField++;
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception exField)
+                        {
+                            Debug.WriteLine("重新 mapping Field 失敗: " + exField.Message);
+                        }
+                    }
+                    cc.LockContents = true;
+                }
+
+                MessageBox.Show($"已重新連結之附註數量: {updatedField}", "完成");
             }
-            cc.LockContents = false;
-            cc.Range.Text = val;
-            cc.LockContents = true;
-            cc.LockContentControl = true;
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                Debug.WriteLine(ex);
+            }
         }
 
-        
+        // 將實際檔案路徑轉為 LINK 欄位所需格式（雙反斜線）
+        private static string EscapePathForLinkField(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return path;
+            // Word LINK 欄位中路徑通常顯示為 C:\\Folder\\File.xlsx
+            return path.Replace("\\", "\\\\");
+        }
 
-        
+        // 將欄位中可能是已雙反斜線顯示的路徑還原為單反斜線，以便比較
+        private static string NormalizePathForCompare(string fieldPath)
+        {
+            if (string.IsNullOrEmpty(fieldPath)) return fieldPath;
+            return fieldPath.Replace("\\\\", "\\");
+        }
 
-        
 
-        
-        
+
+
+
+
+
+
+
     }
 }

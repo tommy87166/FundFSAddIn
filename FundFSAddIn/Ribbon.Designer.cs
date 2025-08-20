@@ -38,18 +38,18 @@
             this.group1 = this.Factory.CreateRibbonGroup();
             this.tab = this.Factory.CreateRibbonTab();
             this.group_inserttable = this.Factory.CreateRibbonGroup();
-            this.group_opensource = this.Factory.CreateRibbonGroup();
-            this.group_edit = this.Factory.CreateRibbonGroup();
-            this.group_setting = this.Factory.CreateRibbonGroup();
-            this.lblExcelFileName = this.Factory.CreateRibbonLabel();
             this.btnInsertTable = this.Factory.CreateRibbonButton();
             this.btnInsertText = this.Factory.CreateRibbonButton();
+            this.group_opensource = this.Factory.CreateRibbonGroup();
             this.btnGoToExcel = this.Factory.CreateRibbonButton();
+            this.group_edit = this.Factory.CreateRibbonGroup();
             this.btnUpdateOne = this.Factory.CreateRibbonButton();
             this.btnUpdateAll = this.Factory.CreateRibbonButton();
             this.btnDeleteCC = this.Factory.CreateRibbonButton();
+            this.group_setting = this.Factory.CreateRibbonGroup();
             this.btnSetExcelFilePath = this.Factory.CreateRibbonButton();
             this.btnRemapLinks = this.Factory.CreateRibbonButton();
+            this.lblExcelFileName = this.Factory.CreateRibbonLabel();
             this.tab1.SuspendLayout();
             this.tab.SuspendLayout();
             this.group_inserttable.SuspendLayout();
@@ -85,31 +85,6 @@
             this.group_inserttable.Items.Add(this.btnInsertText);
             this.group_inserttable.Name = "group_inserttable";
             // 
-            // group_opensource
-            // 
-            this.group_opensource.Items.Add(this.btnGoToExcel);
-            this.group_opensource.Name = "group_opensource";
-            // 
-            // group_edit
-            // 
-            this.group_edit.Items.Add(this.btnUpdateOne);
-            this.group_edit.Items.Add(this.btnUpdateAll);
-            this.group_edit.Items.Add(this.btnDeleteCC);
-            this.group_edit.Name = "group_edit";
-            // 
-            // group_setting
-            // 
-            this.group_setting.Items.Add(this.btnSetExcelFilePath);
-            this.group_setting.Items.Add(this.btnRemapLinks);
-            this.group_setting.Items.Add(this.lblExcelFileName);
-            this.group_setting.Label = "指定附註檔";
-            this.group_setting.Name = "group_setting";
-            // 
-            // lblExcelFileName
-            // 
-            this.lblExcelFileName.Label = "狀態";
-            this.lblExcelFileName.Name = "lblExcelFileName";
-            // 
             // btnInsertTable
             // 
             this.btnInsertTable.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
@@ -128,6 +103,11 @@
             this.btnInsertText.ShowImage = true;
             this.btnInsertText.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnInsertText_Click);
             // 
+            // group_opensource
+            // 
+            this.group_opensource.Items.Add(this.btnGoToExcel);
+            this.group_opensource.Name = "group_opensource";
+            // 
             // btnGoToExcel
             // 
             this.btnGoToExcel.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
@@ -136,6 +116,13 @@
             this.btnGoToExcel.Name = "btnGoToExcel";
             this.btnGoToExcel.ShowImage = true;
             this.btnGoToExcel.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnGoToExcel_Click);
+            // 
+            // group_edit
+            // 
+            this.group_edit.Items.Add(this.btnUpdateOne);
+            this.group_edit.Items.Add(this.btnUpdateAll);
+            this.group_edit.Items.Add(this.btnDeleteCC);
+            this.group_edit.Name = "group_edit";
             // 
             // btnUpdateOne
             // 
@@ -164,6 +151,14 @@
             this.btnDeleteCC.ShowImage = true;
             this.btnDeleteCC.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnDeleteCC_Click);
             // 
+            // group_setting
+            // 
+            this.group_setting.Items.Add(this.btnSetExcelFilePath);
+            this.group_setting.Items.Add(this.btnRemapLinks);
+            this.group_setting.Items.Add(this.lblExcelFileName);
+            this.group_setting.Label = "指定附註檔";
+            this.group_setting.Name = "group_setting";
+            // 
             // btnSetExcelFilePath
             // 
             this.btnSetExcelFilePath.Image = global::FundFSAddIn.Properties.Resources.icon_sheet;
@@ -179,6 +174,11 @@
             this.btnRemapLinks.Name = "btnRemapLinks";
             this.btnRemapLinks.ShowImage = true;
             this.btnRemapLinks.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnRemapLinks_Click);
+            // 
+            // lblExcelFileName
+            // 
+            this.lblExcelFileName.Label = "狀態";
+            this.lblExcelFileName.Name = "lblExcelFileName";
             // 
             // Ribbon
             // 
