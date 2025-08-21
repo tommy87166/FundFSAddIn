@@ -75,12 +75,7 @@ namespace FundFSAddIn
                 Excel.Worksheet ws = null;
                 try
                 {
-                    ws = (Excel.Worksheet)_sharedWorkbook.Sheets[sheet];
-                    string printArea = ws.PageSetup.PrintArea;
-                    if (string.IsNullOrWhiteSpace(printArea))
-                        throw new Exception("該工作表未設定列印範圍");
-                    Excel.Range rng = ws.Range[printArea];
-                    rng.Copy();
+                    copyTableFromExcel(ws, sheet);
                     Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
                     Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
                     wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
@@ -356,7 +351,7 @@ namespace FundFSAddIn
             }
         }
 
-        //功能-鎖定附註?
+        //功能-鎖定附註
         private void btnLock_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -369,6 +364,7 @@ namespace FundFSAddIn
                         (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
                          cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
                     {
+                        cc.LockContents = false;
                         foreach (Word.Field field in cc.Range.Fields) {
                             if (field.LinkFormat != null){
                                 field.LinkFormat.AutoUpdate = false;
@@ -379,7 +375,7 @@ namespace FundFSAddIn
                         locked++;
                     }
                 }
-                MessageBox.Show($"已鎖定 {locked} 個附註。", "完成");
+                MessageBox.Show($"已鎖定 {locked} 個附註，並已將其設定為手動更新。。", "完成");
             }
             catch (Exception ex)
             {
@@ -387,7 +383,7 @@ namespace FundFSAddIn
             }
         }
 
-        //功能-解鎖附註?
+        //功能-解鎖附註
         private void btnUnlock_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -400,6 +396,7 @@ namespace FundFSAddIn
                         (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
                          cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
                     {
+                        cc.LockContents = false;
                         foreach (Word.Field field in cc.Range.Fields) {
                             if (field.LinkFormat != null)
                             {
@@ -407,11 +404,10 @@ namespace FundFSAddIn
                             }
                         }
                         cc.LockContentControl = true;
-                        cc.LockContents = false;
                         unlocked++;
                     }
                 }
-                MessageBox.Show($"已解鎖 {unlocked} 個附註。", "完成");
+                MessageBox.Show($"已解鎖 {unlocked} 個附註，並已將其設定為自動更新。", "完成");
             }
             catch (Exception ex)
             {
@@ -420,19 +416,7 @@ namespace FundFSAddIn
         }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-        //?
+        //功能-設定來源附註檔
         private void btnSetExcelFilePath_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -461,33 +445,49 @@ namespace FundFSAddIn
         }
 
 
-
-        //?
+        //功能-重新映射連結
         private void btnRemapLinks_Click(object sender, RibbonControlEventArgs e)
         {
             try
             {
-                ValidateExcelPath();
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int updatedField = 0;
+                //Excel Related
+                ValidateExcelPath();
+                var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
+                EnsureWorkbook(); // 使用共用 Workbook
+                Excel.Worksheet ws = null;
+                //Counts
+                int updatedTable = 0;
+                int updatedText = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    cc.LockContents = false;
-                    foreach (Word.Field field in cc.Range.Fields)
-                    {
-                        if (field.Type == Word.WdFieldType.wdFieldLink)
+                    try {
+                        cc.LockContents = false; //先解鎖
+                        //表格段處理
+                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal)){
+                            if (!sheets.Contains(cc.Tag)) { throw new ArgumentException($"找不到工作表{cc.Tag}"); }
+                            //複製表格段
+                            copyTableFromExcel(ws, cc.Tag);
+                            pasteTableIntoCC(cc);
+                            updatedTable++;
+                        }
+                        else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
                         {
-                            Debug.WriteLine(field.LinkFormat.SourceFullName);
-                            field.LinkFormat.SourceFullName = _excelFilePath; // 更新連結的來源路徑
-                            field.LinkFormat.AutoUpdate = true; // 禁止自動更新
-                            //field.Update();
-                            updatedField++;
+
+
                         }
                     }
-                    cc.LockContents = true;
+                    catch (Exception ex){
+                        cc.Range.Delete();
+                        cc.Range.Text = "發生錯誤: " + ex.Message;
+                    }
+                    finally {
+                        cc.LockContents = true; //先解鎖
+                        cc.LockContentControl = true; //鎖定內容控制項
+                    }
                 }
 
-                MessageBox.Show($"已重新連結之附註數量: {updatedField}", "完成");
+                MessageBox.Show($"已重新連結之附註數量: {updatedTable}", "完成");
             }
             catch (Exception ex)
             {
@@ -497,11 +497,16 @@ namespace FundFSAddIn
         }
 
         
-
-        
-
-
-
+        //Helper-自Excel中複製表格
+        private void copyTableFromExcel (Excel.Worksheet ws,String sheet)
+        {
+            ws = (Excel.Worksheet) _sharedWorkbook.Sheets[sheet];
+            string printArea = ws.PageSetup.PrintArea;
+            if (string.IsNullOrWhiteSpace(printArea))
+                throw new Exception("該工作表未設定列印範圍");
+            Excel.Range rng = ws.Range[printArea];
+            rng.Copy();   
+        }
 
         //Helper-將表格段貼入CC中
         private void pasteTableIntoCC(Word.ContentControl cc)
