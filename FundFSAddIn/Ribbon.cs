@@ -421,7 +421,6 @@ namespace FundFSAddIn
                 var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
                 var names = GetExcelTextDefinedNames(_excelFilePath); //取得全部文字定義名稱
                 EnsureWorkbook(); // 使用共用 Workbook
-                Excel.Worksheet ws = null;
                 //Counts
                 int updatedTable = 0;
                 int updatedText = 0;
