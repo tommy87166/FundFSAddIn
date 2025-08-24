@@ -63,6 +63,16 @@ namespace FundFSAddIn.Properties {
         /// <summary>
         ///   查詢類型 System.Drawing.Bitmap 的當地語系化資源。
         /// </summary>
+        internal static System.Drawing.Bitmap icon_hide {
+            get {
+                object obj = ResourceManager.GetObject("icon_hide", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查詢類型 System.Drawing.Bitmap 的當地語系化資源。
+        /// </summary>
         internal static System.Drawing.Bitmap icon_link {
             get {
                 object obj = ResourceManager.GetObject("icon_link", resourceCulture);

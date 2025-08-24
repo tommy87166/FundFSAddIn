@@ -33,7 +33,7 @@ namespace FundFSAddIn
         {
             if (string.IsNullOrEmpty(_excelFilePath) || !System.IO.File.Exists(_excelFilePath))
             {
-                lblExcelFileName.Label = " ❌  尚未指定附註檔";
+                group_setting.Label = " ❌  尚未指定附註檔";
                 btnInsertTable.Enabled = false;
                 btnInsertText.Enabled = false;
                 btnGoToExcel.Enabled = false;
@@ -41,11 +41,12 @@ namespace FundFSAddIn
                 btnUpdateAll.Enabled = false;
                 btnDeleteCC.Enabled = false;
                 btnRemapLinks.Enabled = false;
+                btnHideExcel.Enabled = false;
             }
             else
             {
                 var fileName = System.IO.Path.GetFileNameWithoutExtension(_excelFilePath);
-                lblExcelFileName.Label = " ✔️  已開啟附註檔(" + fileName+")";
+                group_setting.Label = " ✔️  已開啟附註檔(" + fileName+")";
                 btnInsertTable.Enabled = true;
                 btnInsertText .Enabled = true;
                 btnGoToExcel.Enabled = true;
@@ -53,6 +54,7 @@ namespace FundFSAddIn
                 btnUpdateAll.Enabled = true;
                 btnDeleteCC.Enabled = true;
                 btnRemapLinks.Enabled = true;
+                btnHideExcel.Enabled = true;
             }
         }
 
@@ -71,25 +73,16 @@ namespace FundFSAddIn
                 string sheet = ShowSheetSelectDialog(sheets);
                 if (string.IsNullOrWhiteSpace(sheet)) return;
                 string tag = sheet;
-                EnsureWorkbook(); // 使用共用 Workbook
-                Excel.Worksheet ws = null;
-                try
-                {
-                    copyTableFromExcel(ws, sheet);
-                    Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                    Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
-                    wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
-                    Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
-                    cc.Tag = tag;
-                    cc.Title = tag;
-                    pasteTableIntoCC(cc);
-                    cc.LockContents = true;
-                    cc.LockContentControl = true;
-                }
-                finally
-                {
-                    ReleaseCom(ws);
-                }
+                copyTableFromExcel(sheet);
+                Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
+                Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
+                wrange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+                Word.ContentControl cc = doc.ContentControls.Add(Word.WdContentControlType.wdContentControlRichText, wrange);
+                cc.Tag = tag;
+                cc.Title = tag;
+                pasteTableIntoCC(cc);
+                cc.LockContents = true;
+                cc.LockContentControl = true;
             }
             catch (Exception ex)
             {
@@ -111,35 +104,7 @@ namespace FundFSAddIn
                 }
                 string name = ShowTextNameSelectDialog(names);
                 if (string.IsNullOrWhiteSpace(name)) return;
-
-                // 取得 Excel 範圍
-                EnsureWorkbook();
-                Excel.Name excelName = null;
-                Excel.Range range = null;
-                try
-                {
-                    foreach (Excel.Name n in _sharedWorkbook.Names)
-                    {
-                        if (n != null && n.Name == name)
-                        {
-                            excelName = n;
-                            range = n.RefersToRange;
-                            break;
-                        }
-                    }
-                    if (range == null)
-                    {
-                        MessageBox.Show("無法取得名稱對應的範圍。", "錯誤");
-                        return;
-                    }
-                    range.Copy();
-                }
-                finally
-                {
-                    ReleaseCom(range);
-                    ReleaseCom(excelName);
-                }
-
+                copyTextFromExcel(name);
                 // 插入 Word 內容控制項並貼上 OLE 物件
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
                 Word.Range wrange = doc.Application.Selection?.Range ?? doc.Content;
@@ -375,7 +340,7 @@ namespace FundFSAddIn
                         locked++;
                     }
                 }
-                MessageBox.Show($"已鎖定 {locked} 個附註，並已將其設定為手動更新。。", "完成");
+                MessageBox.Show($"已鎖定 {locked} 個附註，並已將其設定為手動更新。", "完成");
             }
             catch (Exception ex)
             {
@@ -454,6 +419,7 @@ namespace FundFSAddIn
                 //Excel Related
                 ValidateExcelPath();
                 var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
+                var names = GetExcelTextDefinedNames(_excelFilePath); //取得全部文字定義名稱
                 EnsureWorkbook(); // 使用共用 Workbook
                 Excel.Worksheet ws = null;
                 //Counts
@@ -465,16 +431,18 @@ namespace FundFSAddIn
                         cc.LockContents = false; //先解鎖
                         //表格段處理
                         if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal)){
-                            if (!sheets.Contains(cc.Tag)) { throw new ArgumentException($"找不到工作表{cc.Tag}"); }
+                            if (!sheets.Contains(cc.Tag)) { throw new ArgumentException($"找不到工作表-{cc.Tag}"); }
                             //複製表格段
-                            copyTableFromExcel(ws, cc.Tag);
+                            copyTableFromExcel(cc.Tag);
                             pasteTableIntoCC(cc);
                             updatedTable++;
                         }
                         else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
                         {
-
-
+                            if (!names.Contains(cc.Tag)) { throw new ArgumentException($"找不到文字段-{cc.Tag}"); }
+                            copyTextFromExcel(cc.Tag);
+                            pasteTextIntoCC(cc);
+                            updatedText++;
                         }
                     }
                     catch (Exception ex){
@@ -487,25 +455,47 @@ namespace FundFSAddIn
                     }
                 }
 
-                MessageBox.Show($"已重新連結之附註數量: {updatedTable}", "完成");
+                MessageBox.Show($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}", "完成");
             }
             catch (Exception ex)
             {
-                
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
             }
         }
-
         
         //Helper-自Excel中複製表格
-        private void copyTableFromExcel (Excel.Worksheet ws,String sheet)
+        private void copyTableFromExcel (String sheet)
         {
+            EnsureWorkbook(); // 使用共用 Workbook
+            Excel.Worksheet ws = null;
             ws = (Excel.Worksheet) _sharedWorkbook.Sheets[sheet];
             string printArea = ws.PageSetup.PrintArea;
             if (string.IsNullOrWhiteSpace(printArea))
                 throw new Exception("該工作表未設定列印範圍");
             Excel.Range rng = ws.Range[printArea];
-            rng.Copy();   
+            rng.Copy();
+            ReleaseCom(ws);
+        }
+
+        //Helper-自Excel中複製文字
+        private void copyTextFromExcel(String name)
+        {
+            // 取得 Excel 範圍
+            EnsureWorkbook();
+            Excel.Name excelName = null;
+            Excel.Range range = null;
+            foreach (Excel.Name n in _sharedWorkbook.Names)
+            {
+                if (n != null && n.Name == name)
+                {
+                    excelName = n;
+                    range = n.RefersToRange;
+                    break;
+                }
+            }
+            range.Copy();
+            ReleaseCom(range);
+            ReleaseCom(excelName);
         }
 
         //Helper-將表格段貼入CC中
@@ -739,15 +729,19 @@ namespace FundFSAddIn
                 throw new Exception("未指定附註檔");
         }
 
-
-
-
-
-
-
-
-
-
-
+        private void btnHideExcel_Click(object sender, RibbonControlEventArgs e)
+        {
+            if (_sharedExcelApp != null)
+            {
+                try
+                {
+                    _sharedExcelApp.Visible = false;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+                }
+            }
+        }
     }
 }
