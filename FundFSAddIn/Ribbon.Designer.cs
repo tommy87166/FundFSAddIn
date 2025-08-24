@@ -53,6 +53,8 @@
             this.group_setting = this.Factory.CreateRibbonGroup();
             this.btnSetExcelFilePath = this.Factory.CreateRibbonButton();
             this.btnRemapLinks = this.Factory.CreateRibbonButton();
+            this.group_version = this.Factory.CreateRibbonGroup();
+            this.lbVersion = this.Factory.CreateRibbonLabel();
             this.tab1.SuspendLayout();
             this.tab.SuspendLayout();
             this.group_inserttable.SuspendLayout();
@@ -60,6 +62,7 @@
             this.group2.SuspendLayout();
             this.group_lock.SuspendLayout();
             this.group_setting.SuspendLayout();
+            this.group_version.SuspendLayout();
             this.SuspendLayout();
             // 
             // tab1
@@ -81,6 +84,7 @@
             this.tab.Groups.Add(this.group2);
             this.tab.Groups.Add(this.group_lock);
             this.tab.Groups.Add(this.group_setting);
+            this.tab.Groups.Add(this.group_version);
             this.tab.Label = "財報附註工具";
             this.tab.Name = "tab";
             // 
@@ -217,6 +221,16 @@
             this.btnRemapLinks.ShowImage = true;
             this.btnRemapLinks.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnRemapLinks_Click);
             // 
+            // group_version
+            // 
+            this.group_version.Items.Add(this.lbVersion);
+            this.group_version.Name = "group_version";
+            // 
+            // lbVersion
+            // 
+            this.lbVersion.Label = "版本";
+            this.lbVersion.Name = "lbVersion";
+            // 
             // Ribbon
             // 
             this.Name = "Ribbon";
@@ -238,6 +252,8 @@
             this.group_lock.PerformLayout();
             this.group_setting.ResumeLayout(false);
             this.group_setting.PerformLayout();
+            this.group_version.ResumeLayout(false);
+            this.group_version.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -263,6 +279,8 @@
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnUnlock;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton btnHideExcel;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
+        internal Microsoft.Office.Tools.Ribbon.RibbonLabel lbVersion;
+        internal Microsoft.Office.Tools.Ribbon.RibbonGroup group_version;
     }
 
     partial class ThisRibbonCollection

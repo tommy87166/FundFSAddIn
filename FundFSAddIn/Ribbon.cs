@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using System.Deployment.Application;
 using Excel = Microsoft.Office.Interop.Excel;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -22,10 +23,43 @@ namespace FundFSAddIn
 
         //載入Ribbon
         private void Ribbon_Load(object sender, RibbonUIEventArgs e)
-        {
+        {   //Get Version
+            // 顯示版本（ClickOnce/組件皆可）
+            if (lbVersion != null)
+                lbVersion.Label = "版本：" + GetVersionText();
             UpdateExcelFileNameLabel();
         }
 
+        // 安全取得版號（ClickOnce > InformationalVersion > FileVersion > AssemblyVersion）
+        private static string GetVersionText()
+        {
+            try
+            {
+                if (System.Deployment.Application.ApplicationDeployment.IsNetworkDeployed)
+                    return System.Deployment.Application.ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString();
+            }
+            catch { /* 非 ClickOnce 或在偵錯時會拋出，忽略並使用後備方案 */ }
+
+            var asm = typeof(Ribbon).Assembly;
+
+            // 優先使用 AssemblyInformationalVersion（可帶語意版/預發字串）
+            var attrs = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
+            if (attrs != null && attrs.Length > 0)
+            {
+                var info = (System.Reflection.AssemblyInformationalVersionAttribute)attrs[0];
+                if (!string.IsNullOrWhiteSpace(info.InformationalVersion))
+                    return info.InformationalVersion;
+            }
+
+            // 次選：檔案版號
+            var fvi = FileVersionInfo.GetVersionInfo(asm.Location);
+            if (!string.IsNullOrWhiteSpace(fvi.FileVersion))
+                return fvi.FileVersion;
+
+            // 最後：組件版號
+            return asm.GetName().Version?.ToString() ?? "Unknown";
+        }
+    
         //更新工作列狀態
         private void UpdateExcelFileNameLabel()
         {
