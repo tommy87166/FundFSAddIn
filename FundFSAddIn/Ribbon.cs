@@ -465,13 +465,41 @@ namespace FundFSAddIn
         {
             EnsureWorkbook(); // 使用共用 Workbook
             Excel.Worksheet ws = null;
-            ws = (Excel.Worksheet) _sharedWorkbook.Sheets[sheet];
+            ws = (Excel.Worksheet)_sharedWorkbook.Sheets[sheet];
             string printArea = ws.PageSetup.PrintArea;
             if (string.IsNullOrWhiteSpace(printArea))
                 throw new Exception("該工作表未設定列印範圍");
             Excel.Range rng = ws.Range[printArea];
-            rng.Copy();
-            ReleaseCom(ws);
+            // 嘗試複製並確認剪貼簿有資料
+            const int maxRetry = 10;
+            const int retryDelayMs = 500;
+            try {
+                for (int retryCount = 0; retryCount < maxRetry; retryCount++)
+                {
+                    // 清空剪貼簿再複製，避免之前的資料干擾
+                    Clipboard.Clear();
+                    // 複製區域到剪貼簿
+                    rng.Copy();
+                    // 等待剪貼簿更新
+                    System.Threading.Thread.Sleep(retryDelayMs);
+                    // 檢查剪貼簿是否有資料
+                    if (Clipboard.ContainsData(DataFormats.EnhancedMetafile))
+                    {
+                        // 有資料，成功
+                        break;
+                    }
+                    // 如果是最後一次嘗試仍然失敗
+                    if (retryCount == maxRetry - 1)
+                    {
+                        throw new Exception($"複製表格到剪貼簿失敗，已嘗試 {maxRetry} 次");
+                    }
+                    // 等待一下再重試
+                    System.Threading.Thread.Sleep(retryDelayMs * 2);
+                }
+            }
+            finally {
+                ReleaseCom(ws);
+            }
         }
 
         //Helper-自Excel中複製文字
@@ -481,6 +509,7 @@ namespace FundFSAddIn
             EnsureWorkbook();
             Excel.Name excelName = null;
             Excel.Range range = null;
+            // 找到對應的名稱範圍
             foreach (Excel.Name n in _sharedWorkbook.Names)
             {
                 if (n != null && n.Name == name)
@@ -490,9 +519,42 @@ namespace FundFSAddIn
                     break;
                 }
             }
-            range.Copy();
-            ReleaseCom(range);
-            ReleaseCom(excelName);
+            if (range == null)
+                throw new Exception($"找不到名稱定義範圍: {name}");
+            // 嘗試複製並確認剪貼簿有資料
+            const int maxRetry = 10;
+            const int retryDelayMs = 500;
+            try
+            {
+                for (int retryCount = 0; retryCount < maxRetry; retryCount++)
+                {
+                    // 清空剪貼簿再複製，避免之前的資料干擾
+                    Clipboard.Clear();
+                    // 複製區域到剪貼簿
+                    range.Copy();
+                    // 等待剪貼簿更新
+                    System.Threading.Thread.Sleep(retryDelayMs);
+                    // 檢查剪貼簿是否有文字資料
+                    if (Clipboard.ContainsText() || Clipboard.ContainsData(DataFormats.Rtf))
+                    {
+                        // 有資料，成功
+                        break;
+                    }
+                    // 如果是最後一次嘗試仍然失敗
+                    if (retryCount == maxRetry - 1)
+                    {
+                        throw new Exception($"複製文字到剪貼簿失敗，已嘗試 {maxRetry} 次");
+                    }
+                    // 等待一下再重試
+                    System.Threading.Thread.Sleep(retryDelayMs * 2);
+                }
+            }
+            finally
+            {
+                // 確保釋放 COM 物件
+                ReleaseCom(range);
+                ReleaseCom(excelName);
+            }
         }
 
         //Helper-將表格段貼入CC中
