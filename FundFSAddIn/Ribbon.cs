@@ -73,6 +73,7 @@ namespace FundFSAddIn
                 btnUpdateAll.Enabled = false;
                 btnDeleteCC.Enabled = false;
                 btnRemapLinks.Enabled = false;
+                btnRemapOneLink.Enabled = false;
                 btnHideExcel.Enabled = false;
             }
             else
@@ -86,6 +87,7 @@ namespace FundFSAddIn
                 btnUpdateAll.Enabled = true;
                 btnDeleteCC.Enabled = true;
                 btnRemapLinks.Enabled = true;
+                btnRemapOneLink.Enabled = true;
                 btnHideExcel.Enabled = true;
             }
         }
@@ -441,8 +443,42 @@ namespace FundFSAddIn
             }
         }
 
+        //
+        private String reMapCCLink(Word.ContentControl cc, List<String> sheets, List<String> names) {
+            try
+            {
+                cc.LockContents = false; //先解鎖
+                //表格段處理
+                if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal))
+                {
+                    if (!sheets.Contains(cc.Tag)) { throw new ArgumentException($"找不到工作表-{cc.Tag}"); }
+                    copyTableFromExcel(cc.Tag);
+                    pasteTableIntoCC(cc);
+                    return TablePrefix;
+                }
+                else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
+                {
+                    if (!names.Contains(cc.Tag)) { throw new ArgumentException($"找不到文字段-{cc.Tag}"); }
+                    copyTextFromExcel(cc.Tag);
+                    pasteTextIntoCC(cc);
+                    return TextPrefix;
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                cc.Range.Delete();
+                cc.Range.Text = "發生錯誤: " + ex.Message;
+                return null;
+            }
+            finally
+            {
+                cc.LockContents = true; //先解鎖
+                cc.LockContentControl = true; //鎖定內容控制項
+            }
+        }
 
-        //功能-重新映射連結
+        //功能-重新映射所有連結
         private void btnRemapLinks_Click(object sender, RibbonControlEventArgs e)
         {
             try
@@ -458,34 +494,10 @@ namespace FundFSAddIn
                 int updatedText = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    try {
-                        cc.LockContents = false; //先解鎖
-                        //表格段處理
-                        if (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal)){
-                            if (!sheets.Contains(cc.Tag)) { throw new ArgumentException($"找不到工作表-{cc.Tag}"); }
-                            //複製表格段
-                            copyTableFromExcel(cc.Tag);
-                            pasteTableIntoCC(cc);
-                            updatedTable++;
-                        }
-                        else if (cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))
-                        {
-                            if (!names.Contains(cc.Tag)) { throw new ArgumentException($"找不到文字段-{cc.Tag}"); }
-                            copyTextFromExcel(cc.Tag);
-                            pasteTextIntoCC(cc);
-                            updatedText++;
-                        }
-                    }
-                    catch (Exception ex){
-                        cc.Range.Delete();
-                        cc.Range.Text = "發生錯誤: " + ex.Message;
-                    }
-                    finally {
-                        cc.LockContents = true; //先解鎖
-                        cc.LockContentControl = true; //鎖定內容控制項
-                    }
+                    var result = reMapCCLink(cc, sheets, names);
+                    if (result == TablePrefix) updatedTable++;
+                    else if (result == TextPrefix) updatedText++;
                 }
-
                 MessageBox.Show($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}", "完成");
             }
             catch (Exception ex)
@@ -493,7 +505,40 @@ namespace FundFSAddIn
                 MessageBox.Show("發生錯誤：\r\n" + ex.Message);
             }
         }
-        
+
+        //功能-重新映射單一連結
+        private void btnRemapOneLink_Click(object sender, RibbonControlEventArgs e)
+        {
+            try {
+                var app = Globals.ThisAddIn.Application;
+                var sel = app.Selection;
+                if (sel == null || sel.Range == null)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                //Excel Related
+                ValidateExcelPath();
+                var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
+                var names = GetExcelTextDefinedNames(_excelFilePath); //取得全部文字定義名稱
+                EnsureWorkbook(); // 使用共用 Workbook
+                //Counts
+                int updatedTable = 0;
+                int updatedText = 0;
+                foreach (Word.ContentControl cc in sel.Range.ContentControls)
+                {
+                    var result = reMapCCLink(cc, sheets, names);
+                    if (result == TablePrefix) updatedTable++;
+                    else if (result == TextPrefix) updatedText++;
+                }
+                MessageBox.Show($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}", "完成");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("發生錯誤：\r\n" + ex.Message);
+            }
+        }
+
         //Helper-自Excel中複製表格
         private void copyTableFromExcel (String sheet)
         {
@@ -822,6 +867,7 @@ namespace FundFSAddIn
                 throw new Exception("未指定附註檔");
         }
 
+        //功能-隱藏Excel視窗
         private void btnHideExcel_Click(object sender, RibbonControlEventArgs e)
         {
             if (_sharedExcelApp != null)
@@ -836,5 +882,6 @@ namespace FundFSAddIn
                 }
             }
         }
+
     }
 }

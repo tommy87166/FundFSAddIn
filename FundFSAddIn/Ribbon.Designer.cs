@@ -38,23 +38,25 @@
             this.group1 = this.Factory.CreateRibbonGroup();
             this.tab = this.Factory.CreateRibbonTab();
             this.group_inserttable = this.Factory.CreateRibbonGroup();
+            this.group_edit = this.Factory.CreateRibbonGroup();
+            this.group2 = this.Factory.CreateRibbonGroup();
+            this.group_lock = this.Factory.CreateRibbonGroup();
+            this.group_setting = this.Factory.CreateRibbonGroup();
+            this.group_version = this.Factory.CreateRibbonGroup();
+            this.lbVersion = this.Factory.CreateRibbonLabel();
             this.btnInsertTable = this.Factory.CreateRibbonButton();
             this.btnInsertText = this.Factory.CreateRibbonButton();
-            this.group_edit = this.Factory.CreateRibbonGroup();
             this.btnUpdateOne = this.Factory.CreateRibbonButton();
             this.btnUpdateAll = this.Factory.CreateRibbonButton();
             this.btnDeleteCC = this.Factory.CreateRibbonButton();
-            this.group2 = this.Factory.CreateRibbonGroup();
             this.btnGoToExcel = this.Factory.CreateRibbonButton();
             this.btnHideExcel = this.Factory.CreateRibbonButton();
-            this.group_lock = this.Factory.CreateRibbonGroup();
             this.btnLock = this.Factory.CreateRibbonButton();
             this.btnUnlock = this.Factory.CreateRibbonButton();
-            this.group_setting = this.Factory.CreateRibbonGroup();
             this.btnSetExcelFilePath = this.Factory.CreateRibbonButton();
+            this.btnRemapOneLink = this.Factory.CreateRibbonButton();
             this.btnRemapLinks = this.Factory.CreateRibbonButton();
-            this.group_version = this.Factory.CreateRibbonGroup();
-            this.lbVersion = this.Factory.CreateRibbonLabel();
+            this.label1 = this.Factory.CreateRibbonLabel();
             this.tab1.SuspendLayout();
             this.tab.SuspendLayout();
             this.group_inserttable.SuspendLayout();
@@ -95,11 +97,52 @@
             this.group_inserttable.Label = "插入附註";
             this.group_inserttable.Name = "group_inserttable";
             // 
+            // group_edit
+            // 
+            this.group_edit.Items.Add(this.btnUpdateOne);
+            this.group_edit.Items.Add(this.btnUpdateAll);
+            this.group_edit.Items.Add(this.btnDeleteCC);
+            this.group_edit.Label = "更新附註";
+            this.group_edit.Name = "group_edit";
+            // 
+            // group2
+            // 
+            this.group2.Items.Add(this.btnGoToExcel);
+            this.group2.Items.Add(this.btnHideExcel);
+            this.group2.Label = "Excel操作";
+            this.group2.Name = "group2";
+            // 
+            // group_lock
+            // 
+            this.group_lock.Items.Add(this.btnLock);
+            this.group_lock.Items.Add(this.btnUnlock);
+            this.group_lock.Label = "鎖定/解鎖";
+            this.group_lock.Name = "group_lock";
+            // 
+            // group_setting
+            // 
+            this.group_setting.Items.Add(this.btnSetExcelFilePath);
+            this.group_setting.Items.Add(this.btnRemapOneLink);
+            this.group_setting.Items.Add(this.btnRemapLinks);
+            this.group_setting.Label = "指定附註檔";
+            this.group_setting.Name = "group_setting";
+            // 
+            // group_version
+            // 
+            this.group_version.Items.Add(this.lbVersion);
+            this.group_version.Items.Add(this.label1);
+            this.group_version.Name = "group_version";
+            // 
+            // lbVersion
+            // 
+            this.lbVersion.Label = "版本";
+            this.lbVersion.Name = "lbVersion";
+            // 
             // btnInsertTable
             // 
             this.btnInsertTable.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
             this.btnInsertTable.Image = global::FundFSAddIn.Properties.Resources.icon_table;
-            this.btnInsertTable.Label = "表格";
+            this.btnInsertTable.Label = "插入表格";
             this.btnInsertTable.Name = "btnInsertTable";
             this.btnInsertTable.ShowImage = true;
             this.btnInsertTable.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnInsertTable_Click);
@@ -108,18 +151,10 @@
             // 
             this.btnInsertText.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
             this.btnInsertText.Image = global::FundFSAddIn.Properties.Resources.icon_text;
-            this.btnInsertText.Label = "文字";
+            this.btnInsertText.Label = "插入文字";
             this.btnInsertText.Name = "btnInsertText";
             this.btnInsertText.ShowImage = true;
             this.btnInsertText.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnInsertText_Click);
-            // 
-            // group_edit
-            // 
-            this.group_edit.Items.Add(this.btnUpdateOne);
-            this.group_edit.Items.Add(this.btnUpdateAll);
-            this.group_edit.Items.Add(this.btnDeleteCC);
-            this.group_edit.Label = "更新附註";
-            this.group_edit.Name = "group_edit";
             // 
             // btnUpdateOne
             // 
@@ -148,13 +183,6 @@
             this.btnDeleteCC.ShowImage = true;
             this.btnDeleteCC.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnDeleteCC_Click);
             // 
-            // group2
-            // 
-            this.group2.Items.Add(this.btnGoToExcel);
-            this.group2.Items.Add(this.btnHideExcel);
-            this.group2.Label = "Excel操作";
-            this.group2.Name = "group2";
-            // 
             // btnGoToExcel
             // 
             this.btnGoToExcel.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
@@ -172,13 +200,6 @@
             this.btnHideExcel.Name = "btnHideExcel";
             this.btnHideExcel.ShowImage = true;
             this.btnHideExcel.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnHideExcel_Click);
-            // 
-            // group_lock
-            // 
-            this.group_lock.Items.Add(this.btnLock);
-            this.group_lock.Items.Add(this.btnUnlock);
-            this.group_lock.Label = "編輯鎖定";
-            this.group_lock.Name = "group_lock";
             // 
             // btnLock
             // 
@@ -198,38 +219,35 @@
             this.btnUnlock.ShowImage = true;
             this.btnUnlock.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnUnlock_Click);
             // 
-            // group_setting
-            // 
-            this.group_setting.Items.Add(this.btnSetExcelFilePath);
-            this.group_setting.Items.Add(this.btnRemapLinks);
-            this.group_setting.Label = "指定附註檔";
-            this.group_setting.Name = "group_setting";
-            // 
             // btnSetExcelFilePath
             // 
-            this.btnSetExcelFilePath.Image = global::FundFSAddIn.Properties.Resources.icon_sheet;
+            this.btnSetExcelFilePath.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.btnSetExcelFilePath.Image = global::FundFSAddIn.Properties.Resources.icon_excel;
             this.btnSetExcelFilePath.Label = "設定附註檔";
             this.btnSetExcelFilePath.Name = "btnSetExcelFilePath";
             this.btnSetExcelFilePath.ShowImage = true;
             this.btnSetExcelFilePath.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnSetExcelFilePath_Click);
             // 
+            // btnRemapOneLink
+            // 
+            this.btnRemapOneLink.Image = global::FundFSAddIn.Properties.Resources.icon_link;
+            this.btnRemapOneLink.Label = "修復單一附註連結";
+            this.btnRemapOneLink.Name = "btnRemapOneLink";
+            this.btnRemapOneLink.ShowImage = true;
+            this.btnRemapOneLink.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnRemapOneLink_Click);
+            // 
             // btnRemapLinks
             // 
             this.btnRemapLinks.Image = global::FundFSAddIn.Properties.Resources.icon_link;
-            this.btnRemapLinks.Label = "重新連結所有附註至附註檔";
+            this.btnRemapLinks.Label = "修復所有附註連結";
             this.btnRemapLinks.Name = "btnRemapLinks";
             this.btnRemapLinks.ShowImage = true;
             this.btnRemapLinks.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnRemapLinks_Click);
             // 
-            // group_version
+            // label1
             // 
-            this.group_version.Items.Add(this.lbVersion);
-            this.group_version.Name = "group_version";
-            // 
-            // lbVersion
-            // 
-            this.lbVersion.Label = "版本";
-            this.lbVersion.Name = "lbVersion";
+            this.label1.Label = "Made by Tom Pai";
+            this.label1.Name = "label1";
             // 
             // Ribbon
             // 
@@ -281,6 +299,8 @@
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group2;
         internal Microsoft.Office.Tools.Ribbon.RibbonLabel lbVersion;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group_version;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton btnRemapOneLink;
+        internal Microsoft.Office.Tools.Ribbon.RibbonLabel label1;
     }
 
     partial class ThisRibbonCollection
