@@ -1,6 +1,4 @@
-﻿using Microsoft.Office.Interop.Word;
-using Microsoft.Office.Tools.Ribbon;
-using Microsoft.VisualBasic;
+﻿using Microsoft.Office.Tools.Ribbon;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
