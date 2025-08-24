@@ -282,14 +282,36 @@ namespace FundFSAddIn
                     MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
-                int updatedCount = 0;
+                // 檢查選取範圍內的附註數量
+                int ccCount = 0;
+                Word.ContentControl selectedCC = null;
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
-                    if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))) {
-                        foreach (Word.Field field in cc.Range.Fields) { field.Update(); updatedCount++; }
+                    if (!string.IsNullOrEmpty(cc.Tag) && 
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || 
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        ccCount++;
+                        selectedCC = cc;
                     }
                 }
-                MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
+                if (ccCount == 0)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                else if (ccCount > 1)
+                {
+                    MessageBox.Show("請僅選取一個附註。", "提示");
+                    return;
+                }
+                // 更新唯一的附註
+                foreach (Word.Field field in selectedCC.Range.Fields)
+                {
+                    field.Update();
+                }
+                // 在狀態列顯示訊息
+                app.StatusBar = $"已成功更新：{selectedCC.Tag}";
             }
             catch (Exception ex)
             {
@@ -304,14 +326,43 @@ namespace FundFSAddIn
             {
                 ValidateExcelPath();
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int updatedCount = 0;
+                // 計算總數量
+                int totalCount = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal))) {
-                        foreach (Word.Field field in cc.Range.Fields) { field.Update(); updatedCount++; }
+                    if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        totalCount++;
                     }
                 }
-                MessageBox.Show($"已更新{updatedCount}個附註。", "完成");
+                if (totalCount == 0)
+                {
+                    MessageBox.Show("文件中沒有找到附註。", "提示");
+                    return;
+                }
+                // 創建進度對話框
+                var progressDialog = new ProgressDialog("更新全部附註");
+                progressDialog.Show();
+                int updatedCount = 0;
+                // 處理每個內容控制項
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    if (!string.IsNullOrEmpty(cc.Tag) && (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        foreach (Word.Field field in cc.Range.Fields)
+                        {
+                            field.Update();
+                        }
+                        updatedCount++;
+                        // 更新進度
+                        string additionalInfo = $"正在處理: {cc.Tag}";
+                        progressDialog.UpdateProgress(updatedCount, totalCount,additionalInfo);
+                        // 讓UI有機會更新
+                        Application.DoEvents();
+                    }
+                }
+                // 完成處理
+                progressDialog.CompleteProgress($"已成功更新 {updatedCount} 個附註");
             }
             catch (Exception ex)
             {
@@ -356,25 +407,55 @@ namespace FundFSAddIn
             try
             {
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int locked = 0;
+                // 計算總數量以設定進度
+                int totalCount = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
                     if (!string.IsNullOrEmpty(cc.Tag) &&
                         (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
                          cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
                     {
+                        totalCount++;
+                    }
+                }
+                if (totalCount == 0)
+                {
+                    MessageBox.Show("文件中沒有找到附註。", "提示");
+                    return;
+                }
+                // 創建進度對話框
+                var progressDialog = new ProgressDialog("鎖定附註");
+                progressDialog.Show();
+                // 處理每個內容控制項
+                int processedCount = 0;
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    if (!string.IsNullOrEmpty(cc.Tag) &&
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        string additionalInfo = $"正在鎖定: {cc.Tag}";
+                        progressDialog.UpdateProgress(processedCount, totalCount, additionalInfo);
                         cc.LockContents = false;
-                        foreach (Word.Field field in cc.Range.Fields) {
-                            if (field.LinkFormat != null){
+                        foreach (Word.Field field in cc.Range.Fields)
+                        {
+                            if (field.LinkFormat != null)
+                            {
                                 field.LinkFormat.AutoUpdate = false;
                             }
                         }
                         cc.LockContentControl = true;
                         cc.LockContents = true;
-                        locked++;
+                        processedCount++;
+                        // 更新進度
+                        progressDialog.UpdateProgress(processedCount, totalCount);
+                        // 讓UI有機會更新
+                        Application.DoEvents();
                     }
                 }
-                MessageBox.Show($"已鎖定 {locked} 個附註，並已將其設定為手動更新。", "完成");
+
+                // 完成處理
+                progressDialog.CompleteProgress($"已鎖定 {processedCount} 個附註，並已將其設定為手動更新");
             }
             catch (Exception ex)
             {
@@ -388,25 +469,53 @@ namespace FundFSAddIn
             try
             {
                 Word.Document doc = Globals.ThisAddIn.Application.ActiveDocument;
-                int unlocked = 0;
+                // 計算總數量以設定進度
+                int totalCount = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
                     if (!string.IsNullOrEmpty(cc.Tag) &&
                         (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
                          cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
                     {
+                        totalCount++;
+                    }
+                }
+                if (totalCount == 0)
+                {
+                    MessageBox.Show("文件中沒有找到附註。", "提示");
+                    return;
+                }
+                // 創建進度對話框
+                var progressDialog = new ProgressDialog("解鎖附註");
+                progressDialog.Show();
+                // 處理每個內容控制項
+                int processedCount = 0;
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    if (!string.IsNullOrEmpty(cc.Tag) &&
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) ||
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        string additionalInfo = $"正在解鎖: {cc.Tag}";
+                        progressDialog.UpdateProgress(processedCount, totalCount, additionalInfo);
                         cc.LockContents = false;
-                        foreach (Word.Field field in cc.Range.Fields) {
+                        foreach (Word.Field field in cc.Range.Fields)
+                        {
                             if (field.LinkFormat != null)
                             {
                                 field.LinkFormat.AutoUpdate = true;
                             }
                         }
                         cc.LockContentControl = true;
-                        unlocked++;
+                        processedCount++;
+                        // 更新進度
+                        progressDialog.UpdateProgress(processedCount, totalCount);
+                        // 讓UI有機會更新
+                        Application.DoEvents();
                     }
                 }
-                MessageBox.Show($"已解鎖 {unlocked} 個附註，並已將其設定為自動更新。", "完成");
+                // 完成處理
+                progressDialog.CompleteProgress($"已解鎖 {processedCount} 個附註，並已將其設定為自動更新");
             }
             catch (Exception ex)
             {
@@ -489,16 +598,49 @@ namespace FundFSAddIn
                 var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
                 var names = GetExcelTextDefinedNames(_excelFilePath); //取得全部文字定義名稱
                 EnsureWorkbook(); // 使用共用 Workbook
-                //Counts
-                int updatedTable = 0;
-                int updatedText = 0;
+                // 計算總數量以設定進度
+                int totalCount = 0;
                 foreach (Word.ContentControl cc in doc.ContentControls)
                 {
-                    var result = reMapCCLink(cc, sheets, names);
-                    if (result == TablePrefix) updatedTable++;
-                    else if (result == TextPrefix) updatedText++;
+                    if (!string.IsNullOrEmpty(cc.Tag) && 
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || 
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        totalCount++;
+                    }
                 }
-                MessageBox.Show($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}", "完成");
+                if (totalCount == 0)
+                {
+                    MessageBox.Show("文件中沒有找到附註。", "提示");
+                    return;
+                }
+                // 創建進度對話框
+                var progressDialog = new ProgressDialog("修復所有附註連結");
+                progressDialog.Show();
+                // 處理每個內容控制項
+                int updatedTable = 0;
+                int updatedText = 0;
+                int processedCount = 0;
+                foreach (Word.ContentControl cc in doc.ContentControls)
+                {
+                    if (!string.IsNullOrEmpty(cc.Tag) && 
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || 
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        string additionalInfo = $"正在處理: {cc.Tag}";
+                        progressDialog.UpdateProgress(processedCount, totalCount, additionalInfo);
+                        var result = reMapCCLink(cc, sheets, names);
+                        if (result == TablePrefix) updatedTable++;
+                        else if (result == TextPrefix) updatedText++;
+                        processedCount++;
+                        // 更新進度
+                        progressDialog.UpdateProgress(processedCount, totalCount);
+                        // 讓UI有機會更新
+                        Application.DoEvents();
+                    }
+                }
+                // 完成處理
+                progressDialog.CompleteProgress($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}");
             }
             catch (Exception ex)
             {
@@ -509,7 +651,8 @@ namespace FundFSAddIn
         //功能-重新映射單一連結
         private void btnRemapOneLink_Click(object sender, RibbonControlEventArgs e)
         {
-            try {
+            try
+            {
                 var app = Globals.ThisAddIn.Application;
                 var sel = app.Selection;
                 if (sel == null || sel.Range == null)
@@ -517,21 +660,51 @@ namespace FundFSAddIn
                     MessageBox.Show("請先選取一個附註。", "提示");
                     return;
                 }
-                //Excel Related
-                ValidateExcelPath();
-                var sheets = GetExcelSheetNames(_excelFilePath); //取得全部工作表名稱
-                var names = GetExcelTextDefinedNames(_excelFilePath); //取得全部文字定義名稱
-                EnsureWorkbook(); // 使用共用 Workbook
-                //Counts
-                int updatedTable = 0;
-                int updatedText = 0;
+                // 檢查選取範圍內的附註數量
+                int ccCount = 0;
+                Word.ContentControl selectedCC = null;
                 foreach (Word.ContentControl cc in sel.Range.ContentControls)
                 {
-                    var result = reMapCCLink(cc, sheets, names);
-                    if (result == TablePrefix) updatedTable++;
-                    else if (result == TextPrefix) updatedText++;
+                    if (!string.IsNullOrEmpty(cc.Tag) && 
+                        (cc.Tag.StartsWith(TablePrefix, StringComparison.Ordinal) || 
+                         cc.Tag.StartsWith(TextPrefix, StringComparison.Ordinal)))
+                    {
+                        ccCount++;
+                        selectedCC = cc;
+                    }
                 }
-                MessageBox.Show($"已重新連結之表格數量: {updatedTable} 已重新連結之文字數量: {updatedText}", "完成");
+                if (ccCount == 0)
+                {
+                    MessageBox.Show("請先選取一個附註。", "提示");
+                    return;
+                }
+                else if (ccCount > 1)
+                {
+                    MessageBox.Show("請僅選取一個附註。", "提示");
+                    return;
+                }
+                // Excel 相關準備
+                ValidateExcelPath();
+                var sheets = GetExcelSheetNames(_excelFilePath); 
+                var names = GetExcelTextDefinedNames(_excelFilePath);
+                EnsureWorkbook();
+                // 重新映射選取的唯一附註
+                string result = reMapCCLink(selectedCC, sheets, names);
+                string resultMessage;
+                if (result == TablePrefix)
+                {
+                    resultMessage = $"已重新連結表格：{selectedCC.Tag}";
+                }
+                else if (result == TextPrefix)
+                {
+                    resultMessage = $"已重新連結文字：{selectedCC.Tag}";
+                }
+                else
+                {
+                    resultMessage = "重新連結失敗";
+                }
+                // 在狀態列顯示訊息
+                app.StatusBar = resultMessage;
             }
             catch (Exception ex)
             {

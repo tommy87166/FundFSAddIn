@@ -44,6 +44,7 @@
             this.group_setting = this.Factory.CreateRibbonGroup();
             this.group_version = this.Factory.CreateRibbonGroup();
             this.lbVersion = this.Factory.CreateRibbonLabel();
+            this.label1 = this.Factory.CreateRibbonLabel();
             this.btnInsertTable = this.Factory.CreateRibbonButton();
             this.btnInsertText = this.Factory.CreateRibbonButton();
             this.btnUpdateOne = this.Factory.CreateRibbonButton();
@@ -56,7 +57,6 @@
             this.btnSetExcelFilePath = this.Factory.CreateRibbonButton();
             this.btnRemapOneLink = this.Factory.CreateRibbonButton();
             this.btnRemapLinks = this.Factory.CreateRibbonButton();
-            this.label1 = this.Factory.CreateRibbonLabel();
             this.tab1.SuspendLayout();
             this.tab.SuspendLayout();
             this.group_inserttable.SuspendLayout();
@@ -137,6 +137,11 @@
             // 
             this.lbVersion.Label = "版本";
             this.lbVersion.Name = "lbVersion";
+            // 
+            // label1
+            // 
+            this.label1.Label = "Made by Tom Pai";
+            this.label1.Name = "label1";
             // 
             // btnInsertTable
             // 
@@ -243,11 +248,6 @@
             this.btnRemapLinks.Name = "btnRemapLinks";
             this.btnRemapLinks.ShowImage = true;
             this.btnRemapLinks.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnRemapLinks_Click);
-            // 
-            // label1
-            // 
-            this.label1.Label = "Made by Tom Pai";
-            this.label1.Name = "label1";
             // 
             // Ribbon
             // 
