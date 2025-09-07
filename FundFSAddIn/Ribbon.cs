@@ -180,6 +180,7 @@ namespace FundFSAddIn
                         }
 
                         EnsureWorkbook();
+                        _sharedExcelApp.UserControl = true; // 最後一個視窗被關掉時，Excel 自行結束
                         _sharedExcelApp.Visible = true;
 
                         if (nameOrSheet.StartsWith(TablePrefix, StringComparison.OrdinalIgnoreCase))
@@ -751,6 +752,7 @@ namespace FundFSAddIn
             }
             finally {
                 ReleaseCom(ws);
+                ReleaseCom(rng);
             }
         }
 
@@ -879,40 +881,70 @@ namespace FundFSAddIn
                 Visible = false,
                 DisplayAlerts = false
             };
+            HookExcelAppEvents();
             _sharedWorkbook = _sharedExcelApp.Workbooks.Open(_excelFilePath, ReadOnly: false);
             hideExcel();
         }
 
-        //釋放共用資源
-        private void ReleaseExcelResources()
+        // 在 EnsureWorkbook() 建立 _sharedExcelApp 後呼叫
+        private void HookExcelAppEvents()
+        {
+            if (_sharedExcelApp == null) return;
+            try
+            {
+                _sharedExcelApp.EnableEvents = true;
+                _sharedExcelApp.WorkbookBeforeClose -= ExcelApp_WorkbookBeforeClose;
+            }
+            catch { /* 忽略重複解除 */ }
+
+            _sharedExcelApp.WorkbookBeforeClose += ExcelApp_WorkbookBeforeClose;
+        }
+
+        private void ExcelApp_WorkbookBeforeClose(Excel.Workbook Wb, ref bool Cancel)
         {
             try
             {
-                if (_sharedWorkbook != null)
-                {
-                    try
-                    {
-                        _sharedWorkbook.Close(false);
-                    }
-                    catch { }
-                    finally
-                    {
-                        Marshal.FinalReleaseComObject(_sharedWorkbook);
-                        _sharedWorkbook = null;
-                    }
-                }
+             Marshal.FinalReleaseComObject(_sharedWorkbook);
+             _sharedWorkbook = null;
+             Marshal.FinalReleaseComObject(_sharedExcelApp);
+             _sharedExcelApp = null;
             }
             catch { }
+            // 強制垃圾回收，確保釋放所有 RCW
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
 
+        //釋放共用資源
+        internal void ReleaseExcelResources()
+        {
             try
             {
                 if (_sharedExcelApp != null)
                 {
                     try
                     {
-                        _sharedExcelApp.Quit();
+                        // 解除事件，避免 RCW 殘留
+                        try { _sharedExcelApp.WorkbookBeforeClose -= ExcelApp_WorkbookBeforeClose; } catch { }
                     }
                     catch { }
+                }
+
+                if (_sharedWorkbook != null)
+                {
+                    try { _sharedWorkbook.Close(false); } catch { }
+                    finally
+                    {
+                        Marshal.FinalReleaseComObject(_sharedWorkbook);
+                        _sharedWorkbook = null;
+                    }
+                }
+
+                if (_sharedExcelApp != null)
+                {
+                    try { _sharedExcelApp.Quit(); } catch { }
                     finally
                     {
                         Marshal.FinalReleaseComObject(_sharedExcelApp);
@@ -921,13 +953,15 @@ namespace FundFSAddIn
                 }
             }
             catch { }
-
-            // 強制垃圾回收，確保釋放所有 RCW
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            finally
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
         }
+
         private static void ReleaseCom(object o)
         {
             try

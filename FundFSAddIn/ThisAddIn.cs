@@ -15,6 +15,12 @@ namespace FundFSAddIn
 
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
+            try
+            {
+                // 透過 Visual Designer 產生的 Ribbon 入口取得唯一 Ribbon 實例
+                Globals.Ribbons.Ribbon?.ReleaseExcelResources();
+            }
+            catch { }
         }
 
         #region VSTO 產生的程式碼
