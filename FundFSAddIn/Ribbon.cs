@@ -864,6 +864,7 @@ namespace FundFSAddIn
                 try
                 {
                     var _ = _sharedWorkbook.Name;
+                    hideExcel();
                     return;
                 }
                 catch
@@ -879,6 +880,7 @@ namespace FundFSAddIn
                 DisplayAlerts = false
             };
             _sharedWorkbook = _sharedExcelApp.Workbooks.Open(_excelFilePath, ReadOnly: false);
+            hideExcel();
         }
 
         //釋放共用資源
@@ -1040,6 +1042,14 @@ namespace FundFSAddIn
                 throw new Exception("未指定附註檔");
         }
 
+        //Helper-Hide Excel
+        private void hideExcel() {
+            if (_sharedExcelApp != null)
+            {
+                _sharedExcelApp.Visible = false;
+            }
+        }
+
         //功能-隱藏Excel視窗
         private void btnHideExcel_Click(object sender, RibbonControlEventArgs e)
         {
@@ -1047,7 +1057,7 @@ namespace FundFSAddIn
             {
                 try
                 {
-                    _sharedExcelApp.Visible = false;
+                    hideExcel();
                 }
                 catch (Exception ex)
                 {
